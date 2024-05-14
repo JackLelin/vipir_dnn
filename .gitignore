@@ -1,5 +1,5 @@
-testresult_beforetransfer/
-path_to_save_model/
+testresult*/
+path_to_save_model*/
 .ipynb*
 training_data*/
 __pycache*
