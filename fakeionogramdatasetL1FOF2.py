@@ -20,6 +20,7 @@ class ParabolaIonoDatasetOX(Dataset):
         self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
         np.random.shuffle(self.img_names)
         self.img_names.tolist()
+        self.vipir_freqs = np.load('JM91J_2016014141141.npy', allow_pickle=True)[()]['vipir_freqs']
 #         self.totensor = ToTensor()
     def __len__(self):
         return len(self.img_names)
@@ -30,19 +31,19 @@ class ParabolaIonoDatasetOX(Dataset):
         image = torch.from_numpy((img[:,:]>128).astype(np.float32)).float()[None,:,:]
         image = torch.flip(self.transform(image),dims=[1])
         # Getting the groud truth label
-        # imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]),dtype=np.double)
-        # imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]),dtype=np.double)
-        # label = np.zeros((2,imgO.shape[0],imgO.shape[1]),dtype=np.int_)
-        # label[0,:,:][imgO[:,:,0] > 128] = 1 # R channel, O mode
-        # label[1,:,:][imgX[:,:,1] > 128] = 1 # G channel, X mode
+        imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]),dtype=np.double)
+        imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]),dtype=np.double)
+        label = np.zeros((2,imgO.shape[0],imgO.shape[1]),dtype=np.int_)
+        label[0,:,:][imgO[:,:,0] > 128] = 1 # R channel, O mode
+        label[1,:,:][imgX[:,:,1] > 128] = 1 # G channel, X mode
         # Getting fof2
         asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
-        # label = torch.from_numpy(label).long()
-        # label = torch.flip(self.transform(label),dims=[1])
+        label = torch.from_numpy(label).long()
+        label = torch.flip(self.transform(label),dims=[1])
         target = {}
         target["image"] = image
-        # target["mask"] = label.squeeze()
-        target["asymfO"] = asymf['asym_fO'][-1]
+        target["mask"] = label.squeeze()
+        target["asymfO"] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1])) / self.vipir_freqs.shape[0] * 572
         # target["asymfX"] = asymf['asym_fX']
         return target

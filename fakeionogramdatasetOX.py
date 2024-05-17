@@ -43,6 +43,6 @@ class ParabolaIonoDatasetOX(Dataset):
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()
-        # target["asymfO"] = asymf['asym_fO']
+        # target["asymfO"] = asymf['asym_fO'][-1]
         # target["asymfX"] = asymf['asym_fX']
         return target
