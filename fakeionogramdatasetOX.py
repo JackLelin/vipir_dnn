@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-import os
+import glob, os
 from torchvision.io import read_image
 # import torchvision
 from torchvision import transforms
@@ -17,7 +17,7 @@ class ParabolaIonoDatasetOX(Dataset):
         self.asymf_dir = img_dir+'/asym_f/'
         self.transform = transforms.Resize((572, 572))
         self.target_transform = target_transform
-        self.img_names = np.array(os.listdir(self.img_dir))
+        self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
         np.random.shuffle(self.img_names)
         self.img_names.tolist()
 #         self.totensor = ToTensor()
