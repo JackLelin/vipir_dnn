@@ -3,3 +3,8 @@ path_to_save_model*/
 .ipynb*
 training_data*/
 __pycache*
+TOPHAT*/
+cython_setup/build/
+cython_setup/OXmodeCython.c*
+cython_setup/OXmodeCython.o
+Hand_pick_noise/*
