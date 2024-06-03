@@ -13,11 +13,11 @@ from skimage import measure, morphology
 
 from scipy import ndimage
 
-outdir = 'E:/Machine_Learning/Parabola_Train/TOPHAT/handpick/'
+outdir = 'E:/Machine_Learning/Parabola_Train/VIPIR_PROC/handpick/'
 genedfiles = glob.glob1(outdir,'*.npy') 
 
-orgfolder = 'E:/Machine_Learning/Parabola_Train/TOPHAT/npy/'
-selected_files = glob.glob1('E:/Machine_Learning/Parabola_Train/TOPHAT/selected/','*.png') 
+orgfolder = 'E:/Machine_Learning/Parabola_Train/VIPIR_PROC/org/'
+selected_files = glob.glob1('E:/Machine_Learning/Parabola_Train/VIPIR_PROC/selected/','*.png') 
 selected_files.sort()
 
 todofiles = []
@@ -48,15 +48,16 @@ def getLabel(original):
     crop_region = np.zeros_like(original)
     crop_region[120:-10,30:390] = 1
     original = original * crop_region
-    footprint = np.array([5,3])
-    w_tophat = ndimage.white_tophat(original, footprint)
-    w_tophat[w_tophat<0] = 0
     
-    thresh = w_tophat > np.percentile(w_tophat,94,axis=0)
+    sigma1 = 1
+    gauss1 = ndimage.gaussian_filter(original,sigma1,axes=0)
+    footprint = np.array([15,2])
+    w_tophat = ndimage.white_tophat(gauss1, footprint)
+    w_tophat[w_tophat<0] = 0
+    thresh = w_tophat > np.percentile(w_tophat,92,axis=0)
+    temp = morphology.remove_small_objects(thresh, min_size=10, connectivity=2)
 
-    temp3 = morphology.remove_small_objects(thresh, min_size=5, connectivity=1)
-
-    ycord, xcord = np.nonzero(temp3)
+    ycord, xcord = np.nonzero(temp)
     
     X_points = np.vstack([xcord,ycord]).T
     
@@ -65,7 +66,7 @@ def getLabel(original):
     from sklearn.cluster import AgglomerativeClustering
     from skimage import measure
 
-    label_img, num = measure.label(temp3, return_num=True)
+    label_img, num = measure.label(temp, return_num=True)
 
     clustering = AgglomerativeClustering(linkage='single', n_clusters= int(num * 0.75))
     clustering.fit(X_points)
@@ -80,7 +81,7 @@ def getLabel(original):
 
 def drawplot():
     global im
-    im = ax.scatter(Xcord, Ycord, c= Label,cmap=cmap)
+    im = ax.scatter(Xcord, Ycord, c= Label,marker='.',cmap=cmap)
     im.set_clim([0,Label.max()])
     im.axes.set_title(todofiles[file_idx]); im.axes.title.set_fontsize(10.0)
 
@@ -109,7 +110,7 @@ def loadnext(event):
     global file_idx
     file_idx+=1
 
-    ax.cla()
+    ax.clear()
     loadnpyfile(0)
     drawplot()
 
