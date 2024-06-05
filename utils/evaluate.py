@@ -1,23 +1,29 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from dice_score import dice_coeff
+from utils.dice_score import dice_coeff
 
 @torch.inference_mode()
-def evaluate(net, dataloader, device, amp):
+def evaluate(net, dataloader, device):
     net.eval()
     num_val_batches = len(dataloader)
 
     dice_score = 0
+    
+    for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', position=0, leave=True):
+        image, label = batch['image'], batch['mask']
 
-    for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', leave=False):
-        image = image.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
-        image, label = batch['image'], batch['label']
+        image = image.to(device=device, dtype=torch.float32)
+        label = label.to(device=device, dtype=torch.float32)
+
         mask_pred = net(image)
-        mask_pred = (torch.sum(mask_pred).squeeze() > 0).float()
+        imgO = torch.argmax(mask_pred[:,0:2,:,:],dim=1)
+        imgX = torch.argmax(mask_pred[:,2:4,:,:],dim=1)
+
+        mask_pred = ((imgO + imgX) > 0).float()[:,None,:,:]
 
         dice_score += dice_coeff(mask_pred, label, reduce_batch_first=False)
-    
+    net.train()
     return dice_score / max(num_val_batches, 1)
 
 #     # iterate over the validation set

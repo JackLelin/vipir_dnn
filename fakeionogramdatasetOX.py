@@ -26,13 +26,14 @@ class ParabolaIonoDatasetOX(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_names[idx])
-        img = np.array(Image.open(img_path),dtype=np.double)
+        img = np.array(Image.open(img_path))
         image = torch.from_numpy((img[:,:]>128).astype(np.float32)).float()[None,:,:]
         image = torch.flip(self.transform(image),dims=[1])
         # Getting the groud truth label
-        imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]),dtype=np.double)
-        imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]),dtype=np.double)
+        imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]))
+        imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]))
         label = np.zeros((2,imgO.shape[0],imgO.shape[1]),dtype=np.int_)
+        
         label[0,:,:][imgO[:,:,0] > 128] = 1 # R channel, O mode
         label[1,:,:][imgX[:,:,1] > 128] = 1 # G channel, X mode
         # Getting fof2
