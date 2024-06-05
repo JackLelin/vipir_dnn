@@ -1,7 +1,8 @@
-testresult*/
-path_to_save_model*/
-.ipynb*
+testing_result*/
 training_data*/
+saved_model*/
+old_files/
+.ipynb*
 __pycache*
 VIPIR_PROC/Hand_pick_noise*
 VIPIR_PROC/handpick*
