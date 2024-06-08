@@ -4,7 +4,7 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False):
+    def __init__(self, n_channels, n_classes, bilinear=False, dropout_p = 0.3):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -22,16 +22,27 @@ class UNet(nn.Module):
         self.up4 = (Up(128, 64, bilinear))
         self.outc = (OutConv(64, n_classes))
 
+        self.drop_layer = nn.Dropout(p=dropout_p)
+
     def forward(self, x):
         x1 = self.inc(x)
+        x1 = self.drop_layer(x1)
         x2 = self.down1(x1)
+        x2 = self.drop_layer(x2)
         x3 = self.down2(x2)
+        x3 = self.drop_layer(x3)
         x4 = self.down3(x3)
+        x4 = self.drop_layer(x4)
         x5 = self.down4(x4)
+        x5 = self.drop_layer(x5)
         x = self.up1(x5, x4)
+        x = self.drop_layer(x)
         x = self.up2(x, x3)
+        x = self.drop_layer(x)
         x = self.up3(x, x2)
+        x = self.drop_layer(x)
         x = self.up4(x, x1)
+        # x = self.drop_layer(x)
         logits = self.outc(x)
         return logits
 

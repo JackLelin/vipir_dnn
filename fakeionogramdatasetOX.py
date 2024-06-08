@@ -15,7 +15,7 @@ class ParabolaIonoDatasetOX(Dataset):
         self.gt_dirO = img_dir+'/O/'
         self.gt_dirX = img_dir+'/X/'
         self.asymf_dir = img_dir+'/asym_f/'
-        self.transform = transforms.Resize((572, 572))
+        self.transform = transforms.Resize((572, 572), antialias = False)
         self.target_transform = target_transform
         self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
         np.random.shuffle(self.img_names)

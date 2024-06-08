@@ -15,7 +15,7 @@ class HandPickTraceDataset(Dataset):
     def __init__(self, org_dir, proc_dir):
         self.img_dir = org_dir
         self.label_dir = proc_dir
-        self.transform = transforms.Resize((572, 572))
+        self.transform = transforms.Resize((572, 572), antialias = False)
 
         self.img_names = np.array(glob.glob1(self.label_dir,'*.npy'))
         np.random.shuffle(self.img_names)
