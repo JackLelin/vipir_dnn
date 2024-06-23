@@ -5,7 +5,7 @@ from utils.dice_score import dice_coeff
 
 @torch.inference_mode()
 def evaluate(net, dataloader, device):
-    net.eval()
+    # net.eval()
     num_val_batches = len(dataloader)
 
     dice_score = 0
@@ -23,7 +23,7 @@ def evaluate(net, dataloader, device):
         mask_pred = ((imgO + imgX) > 0).float()[:,None,:,:]
 
         dice_score += dice_coeff(mask_pred, label, reduce_batch_first=False)
-    net.train()
+    # net.train()
     return dice_score / max(num_val_batches, 1)
 
 #     # iterate over the validation set

@@ -47,26 +47,41 @@ def loadnpyfile(val):
 def getLabel(original):
     crop_region = np.zeros_like(original)
     crop_region[120:-10,30:390] = 1
-    original = original * crop_region
-    
-    sigma1 = 1
-    gauss1 = ndimage.gaussian_filter(original,sigma1,axes=0)
-    footprint = np.array([15,2])
-    w_tophat = ndimage.white_tophat(gauss1, footprint)
-    w_tophat[w_tophat<0] = 0
-    thresh = w_tophat > np.percentile(w_tophat,92,axis=0)
-    temp = morphology.remove_small_objects(thresh, min_size=10, connectivity=2)
 
-    ycord, xcord = np.nonzero(temp)
+    original -= (np.min(original)-1)
+    original[np.isnan(original)] = 1
+    # original = original / np.median(original)
+
+    # before = original
+    temp1 = np.log10(original)
+    # temp1 = original
+
+    sigma1 = 0.85
+    sigma2 = 3
+
+    gauss1 = ndimage.gaussian_filter(temp1,sigma1)
+    gauss2 = ndimage.gaussian_filter(temp1,sigma2)
+    out = gauss1-gauss2
+    # out -= np.min(out)
+
+    thresh = out > np.percentile(out,80,axis=0)
     
-    X_points = np.vstack([xcord,ycord]).T
+    temp3 = morphology.remove_small_objects(thresh, min_size=20, connectivity=1)
+    # structure = np.ones([3,1])
+    # temp = ndimage.binary_closing(temp3, structure)
+
+    mask_full = temp3 * crop_region
+
+    ycord, xcord = np.nonzero(mask_full)
+    
+    X_points = np.vstack([xcord,ycord]).T 
     
     
     ###########################################################
     from sklearn.cluster import AgglomerativeClustering
     from skimage import measure
 
-    label_img, num = measure.label(temp, return_num=True)
+    label_img, num = measure.label(mask_full, return_num=True)
 
     clustering = AgglomerativeClustering(linkage='single', n_clusters= int(num * 0.75))
     clustering.fit(X_points)
