@@ -23,10 +23,10 @@ class UNet(nn.Module):
         self.outc = (OutConv(64, n_classes))
 
         # self.drop_layer = nn.Dropout(p=dropout_p)
-        # self.drop_layer_input = nn.Dropout(p=dropout_p)
+        self.drop_layer_input = nn.Dropout(p=dropout_p)
 
     def forward(self, x):
-        # x = self.drop_layer_input(x)
+        x = self.drop_layer_input(x)
         x1 = self.inc(x)
         # x1 = self.drop_layer(x1)
         x2 = self.down1(x1)
