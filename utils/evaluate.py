@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from utils.dice_score import dice_coeff
+from .dice_score import dice_coeff
 
 @torch.inference_mode()
 def evaluate(net, dataloader, device):
