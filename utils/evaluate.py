@@ -10,7 +10,7 @@ def evaluate(net, dataloader, device):
 
     dice_score = 0
     
-    for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', position=0, leave=True):
+    for batch in tqdm(dataloader, total=num_val_batches, desc='Testing round', unit='batch', position=0, leave=True):
         image, label = batch['image'], batch['mask']
 
         image = image.to(device=device, dtype=torch.float32)
@@ -23,6 +23,7 @@ def evaluate(net, dataloader, device):
         mask_pred = ((imgO + imgX) > 0).float()[:,None,:,:]
 
         dice_score += dice_coeff(mask_pred, label, reduce_batch_first=False)
+        del image; del mask_pred
     # net.train()
     return dice_score / max(num_val_batches, 1)
 

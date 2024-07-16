@@ -4,7 +4,7 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False, dropout_p = 0.3):
+    def __init__(self, n_channels, n_classes, bilinear=False, up_kernel_size=3, dropout_p=0.4):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -16,17 +16,19 @@ class UNet(nn.Module):
         self.down3 = (Down(256, 512))
         factor = 2 if bilinear else 1
         self.down4 = (Down(512, 1024 // factor))
-        self.up1 = (Up(1024, 512 // factor, bilinear))
-        self.up2 = (Up(512, 256 // factor, bilinear))
-        self.up3 = (Up(256, 128 // factor, bilinear))
-        self.up4 = (Up(128, 64, bilinear))
+        self.up1 = (Up(1024, 512 // factor, bilinear, up_kernel_size))
+        self.up2 = (Up(512, 256 // factor, bilinear, up_kernel_size))
+        self.up3 = (Up(256, 128 // factor, bilinear, up_kernel_size))
+        self.up4 = (Up(128, 64, bilinear, up_kernel_size))
         self.outc = (OutConv(64, n_classes))
 
         # self.drop_layer = nn.Dropout(p=dropout_p)
-        self.drop_layer_input = nn.Dropout(p=dropout_p)
+        # self.drop_layer_input = nn.Dropout(p=dropout_p)
+        self.dropout_p=dropout_p
 
     def forward(self, x):
-        x = self.drop_layer_input(x)
+        # x = self.drop_layer_input(x)
+        x = nn.functional.dropout(x,p=self.dropout_p,training=True)
         x1 = self.inc(x)
         # x1 = self.drop_layer(x1)
         x2 = self.down1(x1)

@@ -15,11 +15,13 @@ class ParabolaIonoDatasetOX(Dataset):
         self.gt_dirO = img_dir+'/O/'
         self.gt_dirX = img_dir+'/X/'
         self.asymf_dir = img_dir+'/asym_f/'
-        self.transform = transforms.Resize((572, 572), antialias = False)
-        self.target_transform = target_transform
+        # self.transform = transforms.Resize((572, 572), antialias = False)
+        # self.target_transform = target_transform
         self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
-        np.random.shuffle(self.img_names)
+        # np.random.shuffle(self.img_names)
         self.img_names.tolist()
+        img = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0])))
+        self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,img.shape[0],dtype=torch.float32), torch.linspace(0,1,img.shape[1],dtype=torch.float32))
 #         self.totensor = ToTensor()
     def __len__(self):
         return len(self.img_names)
@@ -28,7 +30,9 @@ class ParabolaIonoDatasetOX(Dataset):
         img_path = os.path.join(self.img_dir, self.img_names[idx])
         img = np.array(Image.open(img_path))
         image = torch.from_numpy((img[:,:]>128).astype(np.float32)).float()[None,:,:]
-        image = torch.flip(self.transform(image),dims=[1])
+        # image = self.transform(image)
+        image = torch.flip(image,dims=[1])
+        image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0)
         # Getting the groud truth label
         imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]))
         imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]))
@@ -40,7 +44,8 @@ class ParabolaIonoDatasetOX(Dataset):
         # asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
         label = torch.from_numpy(label).long()
-        label = torch.flip(self.transform(label),dims=[1])
+        # label = self.transform(label)
+        label = torch.flip(label,dims=[1])
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()
