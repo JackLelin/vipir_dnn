@@ -1,4 +1,4 @@
-checkpoint_full/
+checkpoints/
 testing_result*/
 training_data*/
 saved_model*/

@@ -83,10 +83,10 @@ print(device)
 
 epochs = 10
 batch_size = 5
-learning_rate = 1e-4
+learning_rate = 1e-5
 val_percent = 0.1
 
-weight_decay = 1e-3
+weight_decay = 5e-3
 momentum = 0.2
 gradient_clipping = 1.0
        
@@ -97,13 +97,11 @@ n_train = len(train_dataset) - n_val
 train_set, val_set = random_split(train_dataset, [n_train, n_val], generator=torch.Generator())
 
 # 3. Create data loaders
-loader_args = dict(batch_size=batch_size, num_workers=5, pin_memory=True) #os.cpu_count()
+loader_args = dict(batch_size=batch_size,  pin_memory=True) #os.cpu_count()num_workers=5,
 
 train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args)
-
 # loader_args['batch_size'] = 5
 val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args)
-
 test_dataset = HandPickTraceDataset('VIPIR_PROC/proc', 'VIPIR_PROC/dog_pick')
 test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_args)
 
@@ -114,7 +112,7 @@ testim = np.load('VIPIR_PROC/proc/' + testfiles[0], allow_pickle=True, fix_impor
 testim = torch.from_numpy(testim['mask_full']).float()
 XX, YY = torch.meshgrid(torch.linspace(0,1,testim.size()[0],dtype=torch.float32),torch.linspace(0,1,testim.size()[1],dtype=torch.float32))
 
-model = UNet(n_channels=3, n_classes=4, bilinear=False)
+model = UNet(n_channels=3, n_classes=4, bilinear=False, dropout_p=0.4)
 model = model.to(device=device)
 model.train()
 

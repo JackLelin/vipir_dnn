@@ -15,12 +15,13 @@ class DoubleConv(nn.Module):
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(mid_channels),
-            nn.GroupNorm(mid_channels, mid_channels),
             nn.ReLU(inplace=True),
+            nn.GroupNorm(mid_channels, mid_channels),
+
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
             nn.GroupNorm(mid_channels, out_channels),
-            nn.ReLU(inplace=True)
         )
 
     def forward(self, x):
