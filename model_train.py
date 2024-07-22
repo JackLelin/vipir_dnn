@@ -58,23 +58,28 @@ def test_on_TOPHAT(model, epoch_num):
         img = torch.cat(img,dim=0)
         img = img.to('cuda')
         label = model(img)
-        for img1,label1 in zip(img,label):
+        for i in range(5):
+            img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
-            # transform = transforms.ToPILImage()
-            # img = transform(label1)
             imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
             imgX = torch.argmax(label1[2:4,:,:],dim=0).detach().numpy()
-            fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(16, 7))
-            plt.title(f'epoch{epoch_num}_{file}')
+            fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
+            plt.title(f'epoch{epoch_num}_{filename[i]}')
             ax = axs[0]
             ax.imshow(img1.detach().squeeze().cpu().numpy()[0], origin='lower', aspect = 'auto')
             ax.axis('off')
             ax = axs[1]
-
+            ax.imshow(imgO, origin='lower', aspect = 'auto')
+            ax.axis('off')
+            ax = axs[2]
+            ax.imshow(imgX, origin='lower', aspect = 'auto')
+            ax.axis('off')
+            ax = axs[3]
             imgX[imgO==1]=2
             ax.imshow(imgX, origin='lower', aspect = 'auto')
             ax.axis('off')
-            plt.savefig(f'testing_result/epoch{epoch_num}_{file[:-4]}.png', bbox_inches='tight')
+
+            plt.savefig(f'testing_result/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
             plt.close()
         del label; del img
     return
@@ -91,7 +96,9 @@ weight_decay = 5e-3
 momentum = 0.2
 gradient_clipping = 1.0
 
-target_size = [572,572]
+target_size = [524,412] #[572,572]
+original_size = [512,408]
+
 train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize='resize')
 
 n_val = int(len(train_dataset) * val_percent)
@@ -109,8 +116,8 @@ test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_ar
 
 testfiles = glob.glob1('VIPIR_PROC/proc/','*.npy')
 
-resize_tr = transforms.Resize(target_size, antialias = False)
-# resize_tr = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
+# resize_tr = transforms.Resize(target_size, antialias = False)
+resize_tr = Pad([(target_size[1] - original_size[1])//2, (target_size[0] - original_size[0])//2])
 
 XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
