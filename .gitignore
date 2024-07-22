@@ -16,3 +16,4 @@ VIPIR_PROC/selected
 cython_setup/build/
 cython_setup/OXmodeCython.c*
 cython_setup/OXmodeCython.o
+OXmode*

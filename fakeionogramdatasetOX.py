@@ -5,24 +5,31 @@ import glob, os
 from torchvision.io import read_image
 # import torchvision
 from torchvision import transforms
+from torchvision.transforms.v2 import Pad
 
 from PIL import Image
 # from torchvision.transforms import ToTensor
 
 class ParabolaIonoDatasetOX(Dataset):
-    def __init__(self, img_dir, target_transform=None):
+    def __init__(self, img_dir, target_size = None, resize = 'resize'):
         self.img_dir = img_dir+'/train'
         self.gt_dirO = img_dir+'/O/'
         self.gt_dirX = img_dir+'/X/'
-        self.asymf_dir = img_dir+'/asym_f/'
-        # self.transform = transforms.Resize((572, 572), antialias = False)
-        # self.target_transform = target_transform
+        # self.asymf_dir = img_dir+'/asym_f/'
         self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
         # np.random.shuffle(self.img_names)
         self.img_names.tolist()
-        img = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0])))
-        self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,img.shape[0],dtype=torch.float32), torch.linspace(0,1,img.shape[1],dtype=torch.float32))
-#         self.totensor = ToTensor()
+
+        original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).shape
+        self.target_size = target_size if target_size != None else original_size
+        self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
+        if target_size == None:
+            self.transform = None 
+        elif resize == 'resize':
+            self.transform = transforms.Resize(self.target_size, antialias = False)
+        elif resize == 'pad':
+            self.transform = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
+
     def __len__(self):
         return len(self.img_names)
 
@@ -30,7 +37,7 @@ class ParabolaIonoDatasetOX(Dataset):
         img_path = os.path.join(self.img_dir, self.img_names[idx])
         img = np.array(Image.open(img_path))
         image = torch.from_numpy((img[:,:]>128).astype(np.float32)).float()[None,:,:]
-        # image = self.transform(image)
+        if self.transform != None: image = self.transform(image)
         image = torch.flip(image,dims=[1])
         image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0)
         # Getting the groud truth label
@@ -44,8 +51,8 @@ class ParabolaIonoDatasetOX(Dataset):
         # asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
         label = torch.from_numpy(label).long()
-        # label = self.transform(label)
-        label = torch.flip(label,dims=[1])
+        if self.transform != None: label = self.transform(label)
+        label = torch.flip(label,dims=[-2])
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()

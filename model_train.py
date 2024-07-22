@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
+from torchvision.transforms.v2 import Pad
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 import glob
@@ -50,7 +51,7 @@ def test_on_TOPHAT(model, epoch_num):
             filename += [file]
             testdata = np.load('VIPIR_PROC/proc/' + file, allow_pickle=True, fix_imports=True)[()]
             testimage = torch.from_numpy(testdata['mask_full']).float()
-            testimage = testimage[None,None,:,:] #resize_tr(testimage1[None,None,:,:])
+            testimage = testimage[None,None,:,:] if resize_tr == None else resize_tr(testimage[None,None,:,:])
             testimage = torch.cat([testimage,XX[None,None,:,:],YY[None,None,:,:]],dim=-3)
             img += [testimage]
         
@@ -89,8 +90,9 @@ val_percent = 0.1
 weight_decay = 5e-3
 momentum = 0.2
 gradient_clipping = 1.0
-       
-train_dataset = ParabolaIonoDatasetOX('training_data')
+
+target_size = [572,572]
+train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize='resize')
 
 n_val = int(len(train_dataset) * val_percent)
 n_train = len(train_dataset) - n_val
@@ -100,17 +102,17 @@ train_set, val_set = random_split(train_dataset, [n_train, n_val], generator=tor
 loader_args = dict(batch_size=batch_size,  pin_memory=True) #os.cpu_count()num_workers=5,
 
 train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args)
-# loader_args['batch_size'] = 5
 val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args)
-test_dataset = HandPickTraceDataset('VIPIR_PROC/proc', 'VIPIR_PROC/dog_pick')
+
+test_dataset = HandPickTraceDataset('VIPIR_PROC/proc', 'VIPIR_PROC/dog_pick', target_size= target_size, resize='resize')
 test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_args)
 
 testfiles = glob.glob1('VIPIR_PROC/proc/','*.npy')
-# resize_tr = transforms.Resize((572, 572), antialias = False)
 
-testim = np.load('VIPIR_PROC/proc/' + testfiles[0], allow_pickle=True, fix_imports=True)[()]
-testim = torch.from_numpy(testim['mask_full']).float()
-XX, YY = torch.meshgrid(torch.linspace(0,1,testim.size()[0],dtype=torch.float32),torch.linspace(0,1,testim.size()[1],dtype=torch.float32))
+resize_tr = transforms.Resize(target_size, antialias = False)
+# resize_tr = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
+
+XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
 model = UNet(n_channels=3, n_classes=4, bilinear=False, dropout_p=0.4)
 model = model.to(device=device)
