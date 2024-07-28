@@ -12,20 +12,26 @@ class DoubleConv(nn.Module):
         super().__init__()
         if not mid_channels:
             mid_channels = out_channels
-        self.double_conv = nn.Sequential(
+        self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(mid_channels),
             nn.ReLU(inplace=True),
-            nn.GroupNorm(mid_channels, mid_channels),
-
+            nn.GroupNorm(mid_channels, mid_channels)
+        )
+        self.conv2 = nn.Sequential(
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-            nn.GroupNorm(mid_channels, out_channels),
+            nn.GroupNorm(out_channels, out_channels),
         )
+        self.in_channels = in_channels
+        self.out_channels = out_channels
 
     def forward(self, x):
-        return self.double_conv(x)
+        channel_factor = self.out_channels // self.in_channels + 1
+        x = self.conv1(x) + torch.cat([x]*channel_factor,dim=1)[:,:self.out_channels,:,:]
+        x = self.conv2(x) + x
+        return x
 
 
 class Down(nn.Module):

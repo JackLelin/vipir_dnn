@@ -89,17 +89,18 @@ print(device)
 
 epochs = 10
 batch_size = 5
-learning_rate = 1e-5
+learning_rate = 5e-5
 val_percent = 0.1
 
-weight_decay = 5e-3
+weight_decay = 1e-3
 momentum = 0.2
 gradient_clipping = 1.0
 
-target_size = [524,412] #[572,572]
+target_size = [572,572] #[524,412]
 original_size = [512,408]
+resize = 'resize'
 
-train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize='resize')
+train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize=resize)
 
 n_val = int(len(train_dataset) * val_percent)
 n_train = len(train_dataset) - n_val
@@ -111,18 +112,22 @@ loader_args = dict(batch_size=batch_size,  pin_memory=True) #os.cpu_count()num_w
 train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args)
 val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args)
 
-test_dataset = HandPickTraceDataset('VIPIR_PROC/proc', 'VIPIR_PROC/dog_pick', target_size= target_size, resize='resize')
+test_dataset = HandPickTraceDataset('VIPIR_PROC/proc', 'VIPIR_PROC/dog_pick', target_size= target_size, resize=resize)
 test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_args)
 
 testfiles = glob.glob1('VIPIR_PROC/proc/','*.npy')
 
-# resize_tr = transforms.Resize(target_size, antialias = False)
-resize_tr = Pad([(target_size[1] - original_size[1])//2, (target_size[0] - original_size[0])//2])
+if resize == 'resize':
+    resize_tr = transforms.Resize(target_size, antialias = False)
+elif resize == 'pad':
+    resize_tr = Pad([(target_size[1] - original_size[1])//2, (target_size[0] - original_size[0])//2])
+else: resize = None
 
 XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = UNet(n_channels=3, n_classes=4, bilinear=False, dropout_p=0.4)
+model = UNet(n_channels=3, n_classes=4, bilinear=False, in_dropout_p = 0.4)
 model = model.to(device=device)
+# model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()
 
 optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)

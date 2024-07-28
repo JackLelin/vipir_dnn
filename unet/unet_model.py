@@ -4,7 +4,7 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False, up_kernel_size=3, dropout_p=0.3):
+    def __init__(self, n_channels, n_classes, bilinear=False, up_kernel_size=3, in_dropout_p=0.3, dropout_p=0.3):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -20,16 +20,14 @@ class UNet(nn.Module):
         self.up2 = (Up(512, 256 // factor, bilinear, up_kernel_size))
         self.up3 = (Up(256, 128 // factor, bilinear, up_kernel_size))
         self.up4 = (Up(128, 64, bilinear, up_kernel_size))
-        self.outc = (OutConv(64, n_classes))
+        self.outc = (OutConv(64+n_channels, n_classes))
 
-        # self.drop_layer = nn.Dropout(p=dropout_p)
-        # self.drop_layer_input = nn.Dropout(p=dropout_p)
-        self.dropout_p=dropout_p
+        self.drop_layer = nn.Dropout(p=dropout_p)
+        self.dropout_p = in_dropout_p
 
     def forward(self, x):
-        # x = self.drop_layer_input(x)
-        x = nn.functional.dropout(x,p=self.dropout_p,training=True)
-        x1 = self.inc(x)
+        xd = nn.functional.dropout(x,p=self.dropout_p,training=True)
+        x1 = self.inc(xd)
         # x1 = self.drop_layer(x1)
         x2 = self.down1(x1)
         # x2 = self.drop_layer(x2)
@@ -47,7 +45,7 @@ class UNet(nn.Module):
         # x = self.drop_layer(x)
         x = self.up4(x, x1)
         # x = self.drop_layer(x)
-        logits = self.outc(x)
+        logits = self.outc(torch.cat([xd, x], dim=1))
         return logits
 
     def use_checkpointing(self):
