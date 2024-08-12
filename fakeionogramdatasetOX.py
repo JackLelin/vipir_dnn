@@ -29,17 +29,19 @@ class ParabolaIonoDatasetOX(Dataset):
             self.transform = transforms.Resize(self.target_size, antialias = False)
         elif resize == 'pad':
             self.transform = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
-
+        
+        self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.5, 0.9), ratio=(0.8, 1.0), interpolation=transforms.InterpolationMode.NEAREST)
     def __len__(self):
         return len(self.img_names)
 
     def __getitem__(self, idx):
+        #crop_region:[120:-10,30:390]
         img_path = os.path.join(self.img_dir, self.img_names[idx])
         img = np.array(Image.open(img_path))
-        image = torch.from_numpy((img[:,:]>128).astype(np.float32)).float()[None,:,:]
+        image = torch.from_numpy((img>128).astype(np.float32)).float()[None,:,:]
         if self.transform != None: image = self.transform(image)
         image = torch.flip(image,dims=[1])
-        image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0)
+        
         # Getting the groud truth label
         imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]))
         imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]))
@@ -50,9 +52,15 @@ class ParabolaIonoDatasetOX(Dataset):
         # Getting fof2
         # asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
-        label = torch.from_numpy(label).long()
+        label = torch.from_numpy(label)
         if self.transform != None: label = self.transform(label)
         label = torch.flip(label,dims=[-2])
+
+        # random crop and resize on both image and labels
+        cropped = self.cropresize(torch.cat([image,label],dim=0))
+        image = cropped[:1,:,:]
+        label = cropped[1:,:,:].long()
+        image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0)
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()

@@ -35,6 +35,7 @@ class HandPickTraceDataset(Dataset):
         return len(self.img_names)
 
     def __getitem__(self, idx):
+        #crop_region:[120:-10,30:390]
         img_path = os.path.join(self.img_dir, self.img_names[idx])
         img = np.load(img_path, allow_pickle = True)[()]['mask_full']
         img = morphology.remove_small_holes(img>0, area_threshold=10, connectivity=1)

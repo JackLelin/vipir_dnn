@@ -17,3 +17,4 @@ cython_setup/build/
 cython_setup/OXmodeCython.c*
 cython_setup/OXmodeCython.o
 OXmode*
+ionogram_test_set_177.npy

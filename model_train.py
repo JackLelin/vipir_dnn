@@ -87,7 +87,7 @@ def test_on_TOPHAT(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 10
+epochs = 20
 batch_size = 5
 learning_rate = 5e-5
 val_percent = 0.1
@@ -98,7 +98,7 @@ gradient_clipping = 1.0
 
 target_size = [572,572] #[524,412]
 original_size = [512,408]
-resize = 'resize'
+resize = 'pad'
 
 train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize=resize)
 
@@ -139,7 +139,7 @@ losses = []
 val_losses = []
 test_losses = []
 
-checkpoint_N = 400
+checkpoint_N = 800
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
