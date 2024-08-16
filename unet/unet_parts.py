@@ -36,22 +36,25 @@ def pos_enc(idx : torch.Tensor , n_embd):
 class BottleneckAttention(nn.Module):
     """Downscaling with maxpool then doing attention"""
 
-    def __init__(self, in_channel, n_heads=8, patch_size=4, N=32):
+    def __init__(self, in_channel, p_drop = 0.2, n_embd = 1024, n_heads=2, patch_size=4, N=32):
         super().__init__()
 
         # calculate all dimensions
         self.N = N # the input image is NxN (Batch,Channel,N,N)
         M = N//patch_size #image is devided into MxM patches
-        self.n_embd = in_channel * patch_size **2
-        
+        self.n_patch = in_channel * patch_size **2 # flatten patch size
+        self.n_embd = n_embd # attention embedding dimension
+
         # initiate modules for patch and unpatch
         self.patch_size = patch_size
         self.unfold = torch.nn.Unfold(kernel_size=patch_size, stride=patch_size)
         self.fold = torch.nn.Fold(N,kernel_size=patch_size, stride=patch_size) # fold the sequency back to 32x32 images
 
         # intitiate the attention modules
-        self.c_attn = nn.Linear(self.n_embd, 3 * self.n_embd, bias=False) # linear block for finding QKV vectors
-        self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, batch_first=True)
+        self.c_attn = nn.Linear(self.n_patch, 2 * self.n_embd, bias=False) # linear block for finding QKV vectors
+        self.vd = nn.Linear(self.n_patch, self.n_embd, bias=False) # down coversion 
+        self.vu = nn.Linear(self.n_embd, self.n_patch, bias=False) # up
+        self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
         self.relu = nn.ReLU(inplace=True)
         self.ln = nn.GroupNorm(1,M*M) #layernorm for attention block, M*M is the sequence length
 
@@ -74,7 +77,8 @@ class BottleneckAttention(nn.Module):
         xp += self.pe #adding position encoding
         xp = self.ln(xp)
         # attention block
-        q, k, v  = self.c_attn(xp).split(self.n_embd, dim=2)
+        q, k  = self.c_attn(xp).split(self.n_embd, dim=2)
+        v = self.vu(self.vd(xp))
         y, _ = self.mhatt(q, k, v)
         
         y = self.fold(y.permute(0,2,1)) # B,L,C*p*p -> x: B,C*p*p,L

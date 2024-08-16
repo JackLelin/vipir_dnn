@@ -4,7 +4,7 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, up_kernel_size=2, in_dropout_p=0.3, dropout_p=0.3):
+    def __init__(self, n_channels, n_classes, up_kernel_size=2, in_dropout_p=0.3, dropout_p=0.1):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -27,26 +27,26 @@ class UNet(nn.Module):
     def forward(self, x):
         xd = nn.functional.dropout(x,p=self.dropout_p,training=True)
         x1 = self.inc(xd)
-        # x1 = self.drop_layer(x1)
+        x1 = self.drop_layer(x1)
         x2 = self.down1(x1)
-        # x2 = self.drop_layer(x2)
+        x2 = self.drop_layer(x2)
         x3 = self.down2(x2)
-        # x3 = self.drop_layer(x3)
+        x3 = self.drop_layer(x3)
         x4 = self.down3(x3)
-        # x4 = self.drop_layer(x4)
+        x4 = self.drop_layer(x4)
         x5 = self.down4(x4)
         
         x5 = self.atten(x5)
-        # print(x5.size())
         # x5 = self.drop_layer(x5)
+        
         x = self.up1(x5, x4)
-        # x = self.drop_layer(x)
+        x = self.drop_layer(x)
         x = self.up2(x, x3)
-        # x = self.drop_layer(x)
+        x = self.drop_layer(x)
         x = self.up3(x, x2)
-        # x = self.drop_layer(x)
+        x = self.drop_layer(x)
         x = self.up4(x, x1)
-        # x = self.drop_layer(x)
+        x = self.drop_layer(x)
         logits = self.outc(torch.cat([xd, x], dim=1))
         return logits
 
