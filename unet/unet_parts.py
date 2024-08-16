@@ -51,9 +51,9 @@ class BottleneckAttention(nn.Module):
         self.fold = torch.nn.Fold(N,kernel_size=patch_size, stride=patch_size) # fold the sequency back to 32x32 images
 
         # intitiate the attention modules
-        self.c_attn = nn.Linear(self.n_patch, 2 * self.n_embd, bias=False) # linear block for finding QKV vectors
-        self.vd = nn.Linear(self.n_patch, self.n_embd, bias=False) # down coversion 
-        self.vu = nn.Linear(self.n_embd, self.n_patch, bias=False) # up
+        self.c_attn = nn.Linear(self.n_patch, 3 * self.n_embd, bias=False) # linear block for finding QKV vectors
+        self.mlp = nn.Sequential(nn.Linear(self.n_embd, self.n_patch, bias=False),
+                                nn.ReLU(inplace=True)) # up coversion 
         self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
         self.relu = nn.ReLU(inplace=True)
         self.ln = nn.GroupNorm(1,M*M) #layernorm for attention block, M*M is the sequence length
@@ -61,8 +61,8 @@ class BottleneckAttention(nn.Module):
         # positional encoding        
         x_enc = torch.arange(M).repeat(M)
         y_enc = torch.arange(M).view(-1,1).repeat([1,M]).flatten()
-        x_enc = pos_enc(x_enc, self.n_embd//2)
-        y_enc = pos_enc(y_enc, self.n_embd//2)
+        x_enc = pos_enc(x_enc, self.n_patch//2)
+        y_enc = pos_enc(y_enc, self.n_patch//2)
         self.register_buffer('pe', torch.cat([x_enc, y_enc], dim=-1)[None,:,:], persistent=False)  #2D position encoding, first half is for x-pos, second half is for y-pos
 
     def forward(self, x):
@@ -77,12 +77,12 @@ class BottleneckAttention(nn.Module):
         xp += self.pe #adding position encoding
         xp = self.ln(xp)
         # attention block
-        q, k  = self.c_attn(xp).split(self.n_embd, dim=2)
-        v = self.vu(self.vd(xp))
+        q, k, v  = self.c_attn(xp).split(self.n_embd, dim=2)
         y, _ = self.mhatt(q, k, v)
-        
-        y = self.fold(y.permute(0,2,1)) # B,L,C*p*p -> x: B,C*p*p,L
         y = self.relu(y)
+        y = self.mlp(y)
+        y = self.fold(y.permute(0,2,1)) # B,L,C*p*p -> x: B,C*p*p,L
+        
         x += y
         return x
 
