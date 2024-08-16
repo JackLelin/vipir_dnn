@@ -30,7 +30,7 @@ class ParabolaIonoDatasetOX(Dataset):
         elif resize == 'pad':
             self.transform = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
         
-        self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.5, 0.9), ratio=(0.8, 1.0), interpolation=transforms.InterpolationMode.NEAREST)
+        self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
     def __len__(self):
         return len(self.img_names)
 

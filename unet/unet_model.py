@@ -4,23 +4,22 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False, up_kernel_size=3, in_dropout_p=0.3, dropout_p=0.3):
+    def __init__(self, n_channels, n_classes, up_kernel_size=2, in_dropout_p=0.3, dropout_p=0.3):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
-        self.bilinear = bilinear
 
-        self.inc = (DoubleConv(n_channels, 64))
-        self.down1 = (Down(64, 128))
-        self.down2 = (Down(128, 256))
-        self.down3 = (Down(256, 512))
-        factor = 2 if bilinear else 1
-        self.down4 = (Down(512, 1024 // factor))
-        self.up1 = (Up(1024, 512 // factor, bilinear, up_kernel_size))
-        self.up2 = (Up(512, 256 // factor, bilinear, up_kernel_size))
-        self.up3 = (Up(256, 128 // factor, bilinear, up_kernel_size))
-        self.up4 = (Up(128, 64, bilinear, up_kernel_size))
-        self.outc = (OutConv(64+n_channels, n_classes))
+        self.inc = (DoubleConv(n_channels, 32))
+        self.down1 = (Down(32, 64))
+        self.down2 = (Down(64, 128))
+        self.down3 = (Down(128, 256))
+        self.down4 = (Down(256, 512))
+        self.atten = BottleneckAttention(512)
+        self.up1 = (Up(512, 256, up_kernel_size))
+        self.up2 = (Up(256, 128, up_kernel_size))
+        self.up3 = (Up(128, 64, up_kernel_size))
+        self.up4 = (Up(64, 32, up_kernel_size))
+        self.outc = (OutConv(32+n_channels, n_classes))
 
         self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
@@ -36,6 +35,9 @@ class UNet(nn.Module):
         x4 = self.down3(x3)
         # x4 = self.drop_layer(x4)
         x5 = self.down4(x4)
+        
+        x5 = self.atten(x5)
+        # print(x5.size())
         # x5 = self.drop_layer(x5)
         x = self.up1(x5, x4)
         # x = self.drop_layer(x)

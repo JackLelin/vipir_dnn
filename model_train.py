@@ -96,7 +96,7 @@ weight_decay = 1e-3
 momentum = 0.2
 gradient_clipping = 1.0
 
-target_size = [572,572] #[524,412]
+target_size = [512,512] #[572,572] #[524,412]
 original_size = [512,408]
 resize = 'pad'
 
@@ -125,7 +125,7 @@ else: resize = None
 
 XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = UNet(n_channels=3, n_classes=4, bilinear=False, in_dropout_p = 0.4)
+model = UNet(n_channels=3, n_classes=4, in_dropout_p = 0.4)
 model = model.to(device=device)
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()
