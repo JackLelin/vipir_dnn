@@ -20,7 +20,7 @@ from torch.optim import AdamW
 class DBCEF(nn.Module):
     """ DBCEF from paper https://arxiv.org/pdf/1906.05229 """
 
-    def __init__(self, epsilon: float = 1e-4, gamma: float = 1.5):
+    def __init__(self, epsilon: float = 1e-4, gamma: float = 1):
         super().__init__()
         self.softmax = nn.Softmax(dim=1)
         self.epsilon = epsilon
@@ -125,7 +125,7 @@ else: resize = None
 
 XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = UNet(n_channels=3, n_classes=4, in_dropout_p = 0.4)
+model = UNet(n_channels=3, n_classes=4, in_dropout_p = 0.4, dropout_p=0.3)
 model = model.to(device=device)
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()
