@@ -22,7 +22,7 @@ class ParabolaIonoDatasetOX(Dataset):
 
         original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).shape
         self.target_size = target_size if target_size != None else original_size
-        self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
+        # self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
         if target_size == None:
             self.transform = None 
         elif resize == 'resize':
@@ -60,7 +60,7 @@ class ParabolaIonoDatasetOX(Dataset):
         cropped = self.cropresize(torch.cat([image,label],dim=0))
         image = cropped[:1,:,:]
         label = cropped[1:,:,:].long()
-        image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0)
+        # image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0)
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()

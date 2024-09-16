@@ -9,12 +9,16 @@ class UNet(nn.Module):
         self.n_channels = n_channels
         self.n_classes = n_classes
 
+        self.atten = nn.Sequential(Attention(in_channel=512, patch_size=1, n_heads=1, n_embd=512, N=32, p_drop=dropout_p),
+                                    Attention(in_channel=512, patch_size=1, n_heads=1, n_embd=512, N=32, p_drop=dropout_p))
+
+        
         self.inc = (DoubleConv(n_channels, 32))
         self.down1 = (Down(32, 64))
         self.down2 = (Down(64, 128))
         self.down3 = (Down(128, 256))
         self.down4 = (Down(256, 512))
-        self.atten = BottleneckAttention(512)
+        # self.atten = BottleneckAttention(512, p_drop=dropout_p)
         self.up1 = (Up(512, 256, up_kernel_size))
         self.up2 = (Up(256, 128, up_kernel_size))
         self.up3 = (Up(128, 64, up_kernel_size))
@@ -26,6 +30,7 @@ class UNet(nn.Module):
 
     def forward(self, x):
         xd = nn.functional.dropout(x,p=self.dropout_p,training=True)
+        # x1 = self.in_att(xd)
         x1 = self.inc(xd)
         x1 = self.drop_layer(x1)
         x2 = self.down1(x1)
@@ -37,7 +42,6 @@ class UNet(nn.Module):
         x5 = self.down4(x4)
         
         x5 = self.atten(x5)
-        # x5 = self.drop_layer(x5)
         
         x = self.up1(x5, x4)
         x = self.drop_layer(x)

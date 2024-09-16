@@ -33,7 +33,7 @@ def pos_enc(idx : torch.Tensor , n_embd):
     pe = torch.cat([torch.sin(idx.view(-1,1)*omega),torch.cos(idx.view(-1,1)*omega)], dim = -1).view(-1,n_embd)
     return pe
 
-class BottleneckAttention(nn.Module):
+class Attention(nn.Module):
     """Downscaling with maxpool then doing attention"""
 
     def __init__(self, in_channel, p_drop = 0.2, n_embd = 1024, n_heads=2, patch_size=4, N=32):
@@ -86,6 +86,81 @@ class BottleneckAttention(nn.Module):
         x += y
         return x
 
+class Transformer(nn.Module):
+    """adding positional encoding and multiple Transformer blocks"""
+
+    def __init__(self, n_heads=1, n_embd = 1024, n_blocks=5, p_drop = 0.2, n_token=408, n_embd_in=512, n_channel_out =4):
+        super().__init__()
+
+        # calculate all dimensions
+        self.n_token = n_token # number of tokens: number of row or number of col
+        self.n_embd = n_embd # attention embedding dimension
+        self.n_embd_in = n_embd_in
+        self.n_channel_out = n_channel_out
+
+        #Linear projection
+        self.in_linear = nn.Linear(self.n_embd_in, self.n_embd)
+        self.out_linear = nn.Linear(self.n_embd, self.n_embd_in * n_channel_out)
+
+        #Transformer train
+        blocks = [Transformer_element(n_heads=n_heads, n_embd=n_embd, n_token=n_token, p_drop=p_drop) for _ in range(n_blocks)]
+        self.blocks = nn.Sequential(*blocks)
+
+        # positional encoding
+        p_e =pos_enc(torch.arange(self.n_token), self.n_embd) 
+        self.register_buffer('pe',p_e[None,:,:], persistent=False)  #2D position encoding, first half is for x-pos, second half is for y-pos
+
+    def forward(self, x: torch.Tensor):
+        # assetion of the input size
+        B, C, E, T = x.size()
+        assert C == 1
+        assert T == self.n_token
+        assert E == self.n_embd_in
+
+        # Transpose the array, each col is a token. n_col is n_token
+        xp = x.squeeze().permute(0,2,1)
+
+        # Linear projection, change the embedding dimension
+        xp = self.in_linear(xp)
+        xp = xp + self.pe #adding position encoding
+        # transformer blocks
+        xp = self.blocks(xp)
+        # Linear projection, outputs n_channel_out channels, so n_channel_out * n_embd_in
+        xp = self.out_linear(xp)
+        # First reshape to channel last, then permute the axes.
+        xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,2,1)
+        xout = xout + torch.cat([x]*self.n_channel_out, dim=1) #resdual connection
+        return xout
+    
+class Transformer_element(nn.Module):
+    """attention + mlp"""
+
+    def __init__(self, n_heads=1, n_embd = 1024, n_token=512, p_drop = 0.2):
+        super().__init__()
+
+        # calculate all dimensions
+        self.n_token = n_token # number of tokens number of row or number of col
+        self.n_embd = n_embd # attention embedding dimension
+
+        # intitiate the attention modules
+        self.c_attn = nn.Linear(self.n_embd, 3 * self.n_embd, bias=False) # linear block for finding QKV vectors
+        self.mlp = nn.Sequential(nn.Linear(self.n_embd, self.n_embd, bias=False),
+                                nn.ReLU(inplace=True)) 
+        self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
+        self.relu = nn.ReLU(inplace=True)
+        self.ln = nn.GroupNorm(1,n_token) #layernorm for attention block, M*M is the sequence length
+
+    def forward(self, x):
+        xp = self.ln(x) #layernorm
+        # attention block
+        q, k, v  = self.c_attn(xp).split(self.n_embd, dim=2)
+        y, _ = self.mhatt(q, k, v)
+        y = self.relu(y)
+        y = self.mlp(y)
+        
+        y = x + y# residual connection
+        return y
+    
 class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
 
@@ -129,7 +204,9 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
-
+        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=1)
+        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
     def forward(self, x):
-        return self.conv(x)
+        y = self.conv1(x) + x
+        y = self.conv2(y)
+        return y

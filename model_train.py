@@ -7,7 +7,7 @@ from tqdm import tqdm
 import glob
 
 from utils.evaluate import evaluate
-from unet import UNet
+from unet import UNet, TransformerNet
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -52,7 +52,7 @@ def test_on_TOPHAT(model, epoch_num):
             testdata = np.load('VIPIR_PROC/proc/' + file, allow_pickle=True, fix_imports=True)[()]
             testimage = torch.from_numpy(testdata['mask_full']).float()
             testimage = testimage[None,None,:,:] if resize_tr == None else resize_tr(testimage[None,None,:,:])
-            testimage = torch.cat([testimage,XX[None,None,:,:],YY[None,None,:,:]],dim=-3)
+            # testimage = torch.cat([testimage,XX[None,None,:,:],YY[None,None,:,:]],dim=-3)
             img += [testimage]
         
         img = torch.cat(img,dim=0)
@@ -66,7 +66,7 @@ def test_on_TOPHAT(model, epoch_num):
             fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
             plt.title(f'epoch{epoch_num}_{filename[i]}')
             ax = axs[0]
-            ax.imshow(img1.detach().squeeze().cpu().numpy()[0], origin='lower', aspect = 'auto')
+            ax.imshow(img1.detach().cpu().numpy()[0], origin='lower', aspect = 'auto')
             ax.axis('off')
             ax = axs[1]
             ax.imshow(imgO, origin='lower', aspect = 'auto')
@@ -87,16 +87,16 @@ def test_on_TOPHAT(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 20
+epochs = 15
 batch_size = 5
-learning_rate = 5e-5
+learning_rate = 1e-5
 val_percent = 0.1
 
-weight_decay = 1e-3
+weight_decay = 5e-3
 momentum = 0.2
 gradient_clipping = 1.0
 
-target_size = [512,512] #[572,572] #[524,412]
+target_size = [512,408] #[572,572] #[524,412]
 original_size = [512,408]
 resize = 'pad'
 
@@ -123,9 +123,9 @@ elif resize == 'pad':
     resize_tr = Pad([(target_size[1] - original_size[1])//2, (target_size[0] - original_size[0])//2])
 else: resize = None
 
-XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
+# XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = UNet(n_channels=3, n_classes=4, in_dropout_p = 0.4, dropout_p=0.3)
+model = TransformerNet(n_channels=1, n_classes=4,input_size=target_size, in_dropout_p = 0.25, dropout_p=0.3)
 model = model.to(device=device)
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()
@@ -139,7 +139,7 @@ losses = []
 val_losses = []
 test_losses = []
 
-checkpoint_N = 800
+checkpoint_N = 1000
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0

@@ -22,7 +22,7 @@ class HandPickTraceDataset(Dataset):
 
         original_size = np.load(os.path.join(self.img_dir, self.img_names[0]), allow_pickle = True)[()]['mask_full'].shape
         self.target_size = target_size if target_size != None else original_size
-        self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
+        # self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
 
         if target_size == None:
             self.transform = None 
@@ -46,7 +46,7 @@ class HandPickTraceDataset(Dataset):
 
         image = torch.from_numpy(img).float()[None,:,:]
         if self.transform != None: image = self.transform(image) 
-        image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0) 
+        # image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0) 
         
         # Getting the cleaning trace
         label = torch.from_numpy(lab).long()[None,:,:]
