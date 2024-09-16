@@ -118,7 +118,7 @@ class Transformer(nn.Module):
         assert E == self.n_embd_in
 
         # Transpose the array, each col is a token. n_col is n_token
-        xp = x.squeeze().permute(0,2,1)
+        xp = x.reshape(B,E,T).permute(0,2,1)
 
         # Linear projection, change the embedding dimension
         xp = self.in_linear(xp)
