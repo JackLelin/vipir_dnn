@@ -23,7 +23,7 @@ class UNet(nn.Module):
         self.up2 = (Up(256, 128, up_kernel_size))
         self.up3 = (Up(128, 64, up_kernel_size))
         self.up4 = (Up(64, 32, up_kernel_size))
-        self.outc = (OutConv(32, n_classes))
+        self.outc = (OutConv(32+n_channels, n_classes))
 
         self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
@@ -51,7 +51,7 @@ class UNet(nn.Module):
         x = self.drop_layer(x)
         x = self.up4(x, x1)
         x = self.drop_layer(x)
-        logits = self.outc(torch.cat([xd]*32+x, dim=1))
+        logits = self.outc(torch.cat([xd, x], dim=1))
         return logits
 
     def use_checkpointing(self):

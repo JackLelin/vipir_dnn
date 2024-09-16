@@ -20,7 +20,7 @@ class TransformerNet(nn.Module):
         self.up2 = (Up(256, 128, up_kernel_size))
         self.up3 = (Up(128, 64, up_kernel_size))
         self.up4 = (Up(64, 32, up_kernel_size))
-        self.outc = (OutConv(32+n_channels, n_classes))
+        self.outc = (OutConv(32, n_classes))
 
         self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
@@ -38,16 +38,16 @@ class TransformerNet(nn.Module):
         # x4 = self.drop_layer(x4)
         x5 = self.down4(x4)
         
-        x = self.up1(x5, x4)
-        # x = self.drop_layer(x)
-        x = self.up2(x, x3)
-        # x = self.drop_layer(x)
-        x = self.up3(x, x2)
-        # x = self.drop_layer(x)
-        x = self.up4(x, x1)
-        # x = self.drop_layer(x)
+        xu = self.up1(x5, x4)
+        # xu = self.drop_layer(xu)
+        xu = self.up2(xu, x3)
+        # xu = self.drop_layer(x)
+        xu = self.up3(xu, x2)
+        # xu = self.drop_layer(x)
+        xu = self.up4(xu, x1)
+        # xu = self.drop_layer(xu)
 
-        logits = self.outc(torch.cat([xd, x], dim=1))
+        logits = self.outc(torch.cat([x]*32, dim=1)+xu)
         return logits
 
     def use_checkpointing(self):
