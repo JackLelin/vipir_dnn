@@ -9,9 +9,9 @@ class TransformerNet(nn.Module):
         self.n_channels = n_channels
         self.n_classes = n_classes
 
-        self.att = Transformer(n_heads=1, n_embd=1024, n_blocks=10, p_drop=dropout_p, n_token=input_size[1], n_embd_in=input_size[0], n_channel_out=n_classes)
+        self.att = Transformer(n_heads=1, n_embd=1024, n_blocks=10, p_drop=dropout_p, n_token=input_size[1], n_embd_in=input_size[0], n_channel_out=4)
 
-        self.inc = (DoubleConv(n_classes, 32))
+        self.inc = (DoubleConv(1, 32))
         self.down1 = (Down(32, 64))
         self.down2 = (Down(64, 128))
         self.down3 = (Down(128, 256))
@@ -20,15 +20,14 @@ class TransformerNet(nn.Module):
         self.up2 = (Up(256, 128, up_kernel_size))
         self.up3 = (Up(128, 64, up_kernel_size))
         self.up4 = (Up(64, 32, up_kernel_size))
-        self.outc = (OutConv(32, n_classes))
+        self.outc = (OutConv(32, 1))
 
         self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
 
     def forward(self, x):
         xd = nn.functional.dropout(x,p=self.dropout_p,training=True)
-        xa = self.att(xd)
-        x1 = self.inc(xa)
+        x1 = self.inc(xd)
         # x1 = self.drop_layer(x1)
         x2 = self.down1(x1)
         # x2 = self.drop_layer(x2)
@@ -47,7 +46,9 @@ class TransformerNet(nn.Module):
         xu = self.up4(xu, x1)
         # xu = self.drop_layer(xu)
 
-        logits = self.outc(torch.cat([x]*32, dim=1)+xu)
+        xu = self.outc(torch.cat([x]*32, dim=1)+xu)
+        logits = self.att(xu)
+
         return logits
 
     def use_checkpointing(self):
