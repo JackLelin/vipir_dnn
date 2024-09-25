@@ -35,7 +35,7 @@ class FOFXloss(nn.Module):
         return loss/input.size()[0]
 
 @torch.no_grad()
-def test_on_TOPHAT(model, epoch_num):    
+def random_asymf_test(model, epoch_num):    
     with torch.inference_mode():
         img = []
         filename = []
@@ -51,28 +51,29 @@ def test_on_TOPHAT(model, epoch_num):
         img = torch.cat(img,dim=0)
         img = img.to('cuda')
         label = model(img)
+        sigmoid = nn.Sigmoid()
         for i in range(5):
             img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
-            imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
-            imgX = torch.argmax(label1[2:4,:,:],dim=0).detach().numpy()
-            fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
-            plt.title(f'epoch{epoch_num}_{filename[i]}')
+
+            image = img1.detach().cpu().numpy()[0]
+            exist = label1[0:4].detach().numpy()
+            locs = label1[4:].detach().numpy().clip(min=0,max=407).astype(np.int_)
+
+            fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(20, 5))
+            plt.title(f'epoch{epoch_num}_{sigmoid(torch.from_numpy(exist))}')
             ax = axs[0]
-            ax.imshow(img1.detach().cpu().numpy()[0], origin='lower', aspect = 'auto')
+            fo = np.zeros_like(image)
+            fo[:,[locs[0],locs[1]]] = 1
+            ax.imshow(image + fo, origin='lower', aspect = 'auto')
             ax.axis('off')
             ax = axs[1]
-            ax.imshow(imgO, origin='lower', aspect = 'auto')
-            ax.axis('off')
-            ax = axs[2]
-            ax.imshow(imgX, origin='lower', aspect = 'auto')
-            ax.axis('off')
-            ax = axs[3]
-            imgX[imgO==1]=2
-            ax.imshow(imgX, origin='lower', aspect = 'auto')
+            fx = np.zeros_like(image)
+            fx[:,[locs[2],locs[3]]] = 1
+            ax.imshow(image + fx, origin='lower', aspect = 'auto')
             ax.axis('off')
 
-            plt.savefig(f'testing_result/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
+            plt.savefig(f'testing_asymf_result/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
             plt.close()
         del label; del img
     return
@@ -140,7 +141,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             inputs, asymf = data['image'], data['asymf']
             inputs, asymf = inputs.to(device), asymf.to(device) 
             outputs = model(inputs)
-            print(outputs.size())
+            # print(outputs.size())
             loss = fofxloss(outputs, asymf)
             loss.backward()
             optimizer.step()
@@ -159,6 +160,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                         inputs, asymf = inputs.to(device), asymf.to(device) 
                         outputs = model(inputs)
                         loss = fofxloss(outputs, asymf)
+                        val_loss += loss.item()
                         del inputs; del asymf
                     avg_val_loss = val_loss / len(val_loader)
                     val_losses += [avg_val_loss]
@@ -166,7 +168,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                     # test_losses += [test_loss.cpu()]
                     # print(f'Epoch: {epoch + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
                     # pick 5 random ionogram for testing
-                    # test_on_TOPHAT(model, epoch+1)
+                    random_asymf_test(model, epoch+1)
                 model.train()
                     
                 fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 4))

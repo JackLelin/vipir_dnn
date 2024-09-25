@@ -11,8 +11,9 @@ class TransformerAsymf(nn.Module):
 
         self.att = Transformer(n_heads=1, n_embd=1024, n_blocks=16, p_drop=dropout_p, n_token=input_size[1], n_embd_in=input_size[0], n_channel_out=n_classes)
 
-        self.linear = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[0], 5))
-        self.softmax = nn.Softmax(dim=1)
+        self.linear1 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[0], 1))
+        self.linear2 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[1], 8))
+        # self.softmax = nn.Softmax(dim=1)
         self.dropout_p = in_dropout_p
 
     def forward(self, x: torch.Tensor):
@@ -20,10 +21,11 @@ class TransformerAsymf(nn.Module):
         xd = nn.functional.dropout(x,p=self.dropout_p,training=True)
         xa = self.att(xd)
         xa = xa.permute(0,1,3,2)
-        xa = self.linear(xa)
-        logits = self.softmax(xa)
-        logits = logits.reshape(B,5,Nc).permute(0,2,1)
-        return logits
+        xa = self.linear1(xa)
+        # logits = self.softmax(xa)
+        logits = xa.reshape(B,Nc)
+        exist = self.linear2(logits)
+        return exist
     
     def use_checkpointing(self):
         self.att = torch.utils.checkpoint(self.att)
