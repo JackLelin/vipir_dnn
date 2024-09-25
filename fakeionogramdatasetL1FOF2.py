@@ -44,6 +44,6 @@ class ParabolaIonoDatasetOX(Dataset):
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()
-        target["asymfO"] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1])) / self.vipir_freqs.shape[0] * 572
+        target["asymf"] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1])) / self.vipir_freqs.shape[0] * 572
         # target["asymfX"] = asymf['asym_fX']
         return target

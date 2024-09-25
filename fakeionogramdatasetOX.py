@@ -15,8 +15,9 @@ class ParabolaIonoDatasetOX(Dataset):
         self.img_dir = img_dir+'/train'
         self.gt_dirO = img_dir+'/O/'
         self.gt_dirX = img_dir+'/X/'
-        # self.asymf_dir = img_dir+'/asym_f/'
+        self.asymf_dir = img_dir+'/asym_f/'
         self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
+        self.vipir_freqs = np.load('JM91J_2016014141141.npy', allow_pickle=True)[()]['vipir_freqs']
         # np.random.shuffle(self.img_names)
         self.img_names.tolist()
 
@@ -49,8 +50,6 @@ class ParabolaIonoDatasetOX(Dataset):
         
         label[0,:,:][imgO[:,:,0] > 128] = 1 # R channel, O mode
         label[1,:,:][imgX[:,:,1] > 128] = 1 # G channel, X mode
-        # Getting fof2
-        # asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
         label = torch.from_numpy(label)
         if self.transform != None: label = self.transform(label)
@@ -64,6 +63,17 @@ class ParabolaIonoDatasetOX(Dataset):
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()
-        # target["asymfO"] = asymf['asym_fO'][-1]
-        # target["asymfX"] = asymf['asym_fX']
+        
+        # Getting fof2
+        asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
+        asymf_tensor = torch.zeros(8)
+        if np.sum(imgO[:,:,0] > 128) > 0:
+            asymf_tensor[0] = 1 if len(asymf['asym_fO'])>1 else 0 # foE
+            asymf_tensor[0] = 1 if len(asymf['asym_fX'])>1 else 0 # fxE
+
+            asymf_tensor[4] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][0]))
+            asymf_tensor[5] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1]))
+            asymf_tensor[6] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fX'][0]))
+            asymf_tensor[7] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fX'][-1]))
+        target["asymf"] = asymf_tensor
         return target
