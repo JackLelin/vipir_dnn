@@ -9,21 +9,21 @@ class UNet(nn.Module):
         self.n_channels = n_channels
         self.n_classes = n_classes
 
-        self.atten = nn.Sequential(Attention(in_channel=512, patch_size=1, n_heads=1, n_embd=512, N=32, p_drop=dropout_p),
-                                    Attention(in_channel=512, patch_size=1, n_heads=1, n_embd=512, N=32, p_drop=dropout_p))
+        # self.atten = nn.Sequential(Attention(in_channel=512, patch_size=1, n_heads=1, n_embd=512, N=32, p_drop=dropout_p),
+        #                             Attention(in_channel=512, patch_size=1, n_heads=1, n_embd=512, N=32, p_drop=dropout_p))
 
         
-        self.inc = (DoubleConv(n_channels, 32))
-        self.down1 = (Down(32, 64))
-        self.down2 = (Down(64, 128))
-        self.down3 = (Down(128, 256))
-        self.down4 = (Down(256, 512))
+        self.inc = (DoubleConv(n_channels, 64))
+        self.down1 = (Down(64,128))
+        self.down2 = (Down(128, 256))
+        self.down3 = (Down(256, 512))
+        self.down4 = (Down(512, 1024))
         # self.atten = BottleneckAttention(512, p_drop=dropout_p)
-        self.up1 = (Up(512, 256, up_kernel_size))
-        self.up2 = (Up(256, 128, up_kernel_size))
-        self.up3 = (Up(128, 64, up_kernel_size))
-        self.up4 = (Up(64, 32, up_kernel_size))
-        self.outc = (OutConv(32+n_channels, n_classes))
+        self.up1 = (Up(1024, 512, up_kernel_size))
+        self.up2 = (Up(512, 256, up_kernel_size))
+        self.up3 = (Up(256, 128, up_kernel_size))
+        self.up4 = (Up(128, 64, up_kernel_size))
+        self.outc = (OutConv(64+n_channels, n_classes))
 
         self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
@@ -41,7 +41,7 @@ class UNet(nn.Module):
         x4 = self.drop_layer(x4)
         x5 = self.down4(x4)
         
-        x5 = self.atten(x5)
+        # x5 = self.atten(x5)
         
         x = self.up1(x5, x4)
         x = self.drop_layer(x)
