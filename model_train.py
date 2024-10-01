@@ -125,8 +125,8 @@ else: resize = None
 
 # XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-# model = TransformerNet(n_channels=1, n_classes=4,input_size=target_size, in_dropout_p = 0.25, dropout_p=0.3)
-model = UNet(n_channels=1, n_classes=4, in_dropout_p = 0.33, dropout_p=0.25)
+model = TransformerNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.25, dropout_p=0.3)
+# model = UNet(n_channels=1, n_classes=4, in_dropout_p = 0.33, dropout_p=0.25)
 model = model.to(device=device)
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()

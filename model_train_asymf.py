@@ -73,7 +73,7 @@ def random_asymf_test(model, epoch_num):
             ax.imshow(image + fx, origin='lower', aspect = 'auto')
             ax.axis('off')
 
-            plt.savefig(f'testing_asymf_result/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
+            plt.savefig(f'testing_result_asymf/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
             plt.close()
         del label; del img
     return
@@ -119,7 +119,7 @@ else: resize = None
 
 # XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = TransformerAsymf(n_channels=1, n_classes=1, input_size=target_size, in_dropout_p = 0.25, dropout_p=0.3)
+model = TransformerAsymf(n_channels=1, input_size=target_size, in_dropout_p = 0.25, dropout_p=0.3)
 model = model.to(device=device)
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()
