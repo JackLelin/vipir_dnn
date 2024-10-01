@@ -12,7 +12,7 @@ from unet import UNet, TransformerNet, TransformerAsymf
 import numpy as np
 import matplotlib.pyplot as plt
 
-from fakeionogramdatasetOX import ParabolaIonoDatasetOX
+from fakeionogramdatasetFOF2 import ParabolaIonoDatasetF
 from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
@@ -24,13 +24,13 @@ class FOFXloss(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, input : torch.Tensor, target : torch.Tensor):
-        exist = torch.clamp(self.sigmoid(input[:,0:4]), min = 1e-10, max = 1-1e-10) 
-        loc = input[:,4:]
+        exist = torch.clamp(input, min = 1e-10, max = 1-1e-10) 
+        # loc = input[:,4:]
         # print(exist)
         loss = 0.0
-        loss += -1*torch.sum(target[:,0:4] * torch.clamp(torch.log(exist), min = -100, max = 0))# +(1-target[:,0:4]) * torch.clamp(torch.log(1-exist), min = -100))
+        loss += -1*torch.sum(target * torch.clamp(torch.log(exist), min = -100, max = 0))# +(1-target[:,0:4]) * torch.clamp(torch.log(1-exist), min = -100))
         # print(loss)
-        loss += torch.sum(target[:,0:4] * (loc - target[:,4:])**2)
+        # loss += torch.sum(target[:,0:4] * (loc - target[:,4:])**2)
         # print(loss)
         return loss/input.size()[0]
 
@@ -51,17 +51,17 @@ def random_asymf_test(model, epoch_num):
         img = torch.cat(img,dim=0)
         img = img.to('cuda')
         label = model(img)
-        sigmoid = nn.Sigmoid()
+        # sigmoid = nn.Sigmoid()
         for i in range(5):
             img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
 
             image = img1.detach().cpu().numpy()[0]
-            exist = label1[0:4].detach().numpy()
-            locs = label1[4:].detach().numpy().clip(min=0,max=407).astype(np.int_)
+            locs = label1.detach().numpy()
+            locs = np.argmax(locs, axis=1).clip(min=0,max=407).astype(np.int_)
 
             fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(20, 5))
-            plt.title(f'epoch{epoch_num}_{sigmoid(torch.from_numpy(exist))}')
+            plt.title(f'epoch{epoch_num}_{locs}')
             ax = axs[0]
             fo = np.zeros_like(image)
             fo[:,[locs[0],locs[1]]] = 1
@@ -94,7 +94,7 @@ target_size = [512,408] #[572,572] #[524,412]
 original_size = [512,408]
 resize = 'pad'
 
-train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize=resize)
+train_dataset = ParabolaIonoDatasetF('training_data', target_size= target_size, resize=resize)
 
 n_val = int(len(train_dataset) * val_percent)
 n_train = len(train_dataset) - n_val

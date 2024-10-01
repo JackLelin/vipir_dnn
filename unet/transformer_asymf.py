@@ -20,11 +20,11 @@ class TransformerAsymf(nn.Module):
         self.up2 = (Up(256, 128, up_kernel_size))
         self.up3 = (Up(128, 64, up_kernel_size))
         self.up4 = (Up(64, 32, up_kernel_size))
-        self.outc = (OutConv(32+n_channels, 8))
+        self.outc = (OutConv(32+n_channels, 4))
 
         self.linear1 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[0], 1))
-        self.linear2 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[1], 1))
-        # self.softmax = nn.Softmax(dim=1)
+        self.linear2 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[1], input_size[1]+1))
+        self.softmax = nn.Softmax(dim=-1)
         self.dropout_p = in_dropout_p
 
     def forward(self, x: torch.Tensor):
@@ -43,11 +43,13 @@ class TransformerAsymf(nn.Module):
         x = self.up4(x, x1)
         xo = self.outc(torch.cat([x,xd], dim=1)) #torch.cat([x]*32, dim=1)+
 
-        xo = xo.permute(0,1,3,2)
+        xo = xo.permute(0,1,3,2) # row major to column major, to sum to each column
         xo = self.linear1(xo)
-        xo = xo.reshape(B,8,Nc)
+        xo = xo.reshape(B,4,Nc)
         output = self.linear2(xo)
-        output = output.reshape(B,8)
+        output = output.reshape(B,4,Nc+1)
+        output = self.softmax(output)
+        # output = output.reshape(B,8)
         return output
     
     def use_checkpointing(self):
