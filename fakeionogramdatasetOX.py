@@ -65,15 +65,15 @@ class ParabolaIonoDatasetOX(Dataset):
         target["mask"] = label.squeeze()
         
         # Getting fof2
-        asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
-        asymf_tensor = torch.zeros(8)
-        if np.sum(imgO[:,:,0] > 128) > 0:
-            asymf_tensor[0] = 1 if len(asymf['asym_fO'])>1 else 0 # foE
-            asymf_tensor[0] = 1 if len(asymf['asym_fX'])>1 else 0 # fxE
+        # asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
+        # asymf_tensor = torch.zeros(8)
+        # if np.sum(imgO[:,:,0] > 128) > 0:
+        #     asymf_tensor[0] = 1 if len(asymf['asym_fO'])>1 else 0 # foE
+        #     asymf_tensor[2] = 1 if len(asymf['asym_fX'])>1 else 0 # fxE
 
-            asymf_tensor[4] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][0]))
-            asymf_tensor[5] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1]))
-            asymf_tensor[6] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fX'][0]))
-            asymf_tensor[7] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fX'][-1]))
-        target["asymf"] = asymf_tensor
+        #     asymf_tensor[4] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][0]))
+        #     asymf_tensor[5] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1]))
+        #     asymf_tensor[6] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fX'][0]))
+        #     asymf_tensor[7] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fX'][-1]))
+        # target["asymf"] = asymf_tensor
         return target

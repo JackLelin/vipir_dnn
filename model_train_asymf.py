@@ -12,7 +12,7 @@ from unet import UNet, TransformerNet, TransformerAsymf
 import numpy as np
 import matplotlib.pyplot as plt
 
-from fakeionogramdatasetOX import ParabolaIonoDatasetOX
+from fakeionogramdatasetFOF2 import ParabolaIonoDatasetF
 from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
@@ -94,7 +94,7 @@ target_size = [512,408] #[572,572] #[524,412]
 original_size = [512,408]
 resize = 'pad'
 
-train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize=resize)
+train_dataset = ParabolaIonoDatasetF('training_data', target_size= target_size, resize=resize)
 
 n_val = int(len(train_dataset) * val_percent)
 n_train = len(train_dataset) - n_val
