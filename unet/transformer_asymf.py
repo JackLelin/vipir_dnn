@@ -23,8 +23,8 @@ class TransformerAsymf(nn.Module):
         self.outc = (OutConv(32+n_channels, 8))
 
         self.linear1 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[0], 1))
-        self.linear2 = nn.Sequential(nn.ReLU(inplace=True), nn.Linear(input_size[1], 1))
-        # self.softmax = nn.Softmax(dim=1)
+        self.linear2 = nn.Sequential(nn.Linear(input_size[1], 1))
+        # self.softmax = nn.Softmax(dim=-1)
         self.dropout_p = in_dropout_p
 
     def forward(self, x: torch.Tensor):
@@ -46,6 +46,7 @@ class TransformerAsymf(nn.Module):
         xo = xo.permute(0,1,3,2)
         xo = self.linear1(xo)
         xo = xo.reshape(B,8,Nc)
+        # xo = self.softmax(xo)
         output = self.linear2(xo)
         output = output.reshape(B,8)
         return output

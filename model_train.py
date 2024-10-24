@@ -20,7 +20,7 @@ from torch.optim import AdamW
 class DBCEF(nn.Module):
     """ DBCEF from paper https://arxiv.org/pdf/1906.05229 """
 
-    def __init__(self, epsilon: float = 1e-4, gamma: float = 1):
+    def __init__(self, epsilon: float = 1e-4, gamma: float = 2.5):
         super().__init__()
         self.softmax = nn.Softmax(dim=1)
         self.epsilon = epsilon
@@ -125,7 +125,7 @@ else: resize = None
 
 # XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = TransformerNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.25, dropout_p=0.3)
+model = TransformerNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 # model = UNet(n_channels=1, n_classes=4, in_dropout_p = 0.33, dropout_p=0.25)
 model = model.to(device=device)
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
@@ -140,7 +140,7 @@ losses = []
 val_losses = []
 test_losses = []
 
-checkpoint_N = 1000
+checkpoint_N = 2500
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
@@ -156,8 +156,8 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             pbar.set_postfix(**{'loss (batch)': loss.item()})
             del inputs; del labels
             optimizer.zero_grad()
-            if (i+1)%checkpoint_N == 0: # validation for every checkpoint_N batch
-                losses += [running_loss / i]
+            if (i)%checkpoint_N == 0: # validation for every checkpoint_N batch
+                losses += [running_loss / (i+1)]
                 model.eval()
                 with torch.no_grad():
                     val_loss = 0.0
@@ -194,8 +194,8 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss,
-                }, f'saved_model/TOPHAT_checkpoint_epoch_{epoch + 1}_{(i+1)*5}.pth')
+                'loss': test_loss   ,
+                }, f'saved_model/TOPHAT_checkpoint_epoch_{epoch + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
             # break
                 
         print('-' * 20)

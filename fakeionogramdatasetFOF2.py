@@ -24,14 +24,14 @@ class ParabolaIonoDatasetF(Dataset):
         original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).shape
         self.target_size = target_size if target_size != None else original_size
         # self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
-        if target_size == None:
+        if resize == None:
             self.transform = None 
         elif resize == 'resize':
             self.transform = transforms.Resize(self.target_size, antialias = False)
         elif resize == 'pad':
             self.transform = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
         
-        self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
+        # self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
     def __len__(self):
         return len(self.img_names)
 
@@ -69,7 +69,9 @@ class ParabolaIonoDatasetF(Dataset):
         asymf_tensor = torch.zeros(8)
         if np.sum(imgO[:,:,0] > 128) > 0:
             asymf_tensor[0] = 1 if len(asymf['asym_fO'])>1 else 0 # foE
+            asymf_tensor[1] = 1 #foF2
             asymf_tensor[2] = 1 if len(asymf['asym_fX'])>1 else 0 # fxE
+            asymf_tensor[3] = 1 #fxF2
 
             asymf_tensor[4] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][0]))
             asymf_tensor[5] = np.argmin(np.abs(self.vipir_freqs - asymf['asym_fO'][-1]))

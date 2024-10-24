@@ -35,7 +35,7 @@ class FOFXloss(nn.Module):
         return loss/input.size()[0]
 
 @torch.no_grad()
-def random_asymf_test(model, epoch_num):    
+def random_asymf_test(model, epoch_num):
     with torch.inference_mode():
         img = []
         filename = []
@@ -73,7 +73,49 @@ def random_asymf_test(model, epoch_num):
             ax.imshow(image + fx, origin='lower', aspect = 'auto')
             ax.axis('off')
 
-            plt.savefig(f'testing_result_asymf/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
+            plt.savefig(f'testing_result_asymf/epoch{epoch_num}_test{i}.png', bbox_inches='tight')
+            plt.close()
+        del label; del img
+
+        img = []
+        truth = torch.zeros([5,8])
+        for i in range(5):
+            example = val_set[np.random.randint(0,len(val_set)-1)]
+            testimage = example["image"]
+            truth[i,:] = example["asymf"]
+            testimage = testimage[None,:,:,:] if resize_tr == None else resize_tr(testimage[None,:,:,:])
+            # testimage = torch.cat([testimage,XX[None,None,:,:],YY[None,None,:,:]],dim=-3)
+            img += [testimage]
+
+        img = torch.cat(img,dim=0)
+        img = img.to('cuda')
+        label = model(img)
+        sigmoid = nn.Sigmoid()
+        truth = truth.int().numpy()
+        for i in range(5):
+            img1,label1 = img[i],label[i]
+            label1 = label1.squeeze().to('cpu')
+
+            image = img1.detach().cpu().numpy()[0]
+            exist = label1[0:4].detach().numpy()
+            locs = label1[4:].detach().numpy().clip(min=0,max=407).astype(np.int_)
+
+            fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(20, 5))
+            plt.title(f'epoch{epoch_num}_{sigmoid(torch.from_numpy(exist))}')
+            ax = axs[0]
+            fo = np.zeros_like(image)
+            fo[:,[locs[0],locs[1]]] = 1
+            fo[:,truth[i,[4,5]]] = 2
+            ax.imshow(image + fo, origin='lower', aspect = 'auto')
+            ax.axis('off')
+            ax = axs[1]
+            fx = np.zeros_like(image)
+            fx[:,[locs[2],locs[3]]] = 1
+            fx[:,truth[i,[6,7]]] = 2
+            ax.imshow(image + fx, origin='lower', aspect = 'auto')
+            ax.axis('off')
+
+            plt.savefig(f'testing_result_asymf/epoch{epoch_num}_val{i}{truth[i,0:4]}.png', bbox_inches='tight')
             plt.close()
         del label; del img
     return
@@ -115,7 +157,7 @@ if resize == 'resize':
     resize_tr = transforms.Resize(target_size, antialias = False)
 elif resize == 'pad':
     resize_tr = Pad([(target_size[1] - original_size[1])//2, (target_size[0] - original_size[0])//2])
-else: resize = None
+else: resize_tr = None
 
 # XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
@@ -133,7 +175,7 @@ losses = []
 val_losses = []
 test_losses = []
 
-checkpoint_N = 1000
+checkpoint_N = 1000 
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
