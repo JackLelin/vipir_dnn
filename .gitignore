@@ -21,3 +21,4 @@ ionogram_test_set_177.npy
 testset_fitting*
 seg_result*
 *.pth
+anchor_test*
