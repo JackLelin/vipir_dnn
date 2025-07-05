@@ -13,14 +13,13 @@ from skimage import morphology
 # from torchvision.transforms import ToTensor
 
 class HandPickTraceDataset(Dataset):
-    def __init__(self, org_dir, proc_dir, target_size = None, resize = 'resize'):
-        self.img_dir = org_dir
-        self.label_dir = proc_dir
+    def __init__(self, label_dir, target_size = None, resize = 'resize'):
+        self.label_dir = label_dir
         self.img_names = np.array(glob.glob1(self.label_dir,'*.npy'))
         # np.random.shuffle(self.img_names)
         self.img_names.tolist()
 
-        original_size = np.load(os.path.join(self.img_dir, self.img_names[0]), allow_pickle = True)[()]['mask_full'].shape
+        original_size = np.load(os.path.join(self.label_dir, self.img_names[0]), allow_pickle = True)[()]['mask_full'].shape
         self.target_size = target_size if target_size != None else original_size
         # self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
 
@@ -36,22 +35,25 @@ class HandPickTraceDataset(Dataset):
 
     def __getitem__(self, idx):
         #crop_region:[120:-10,30:390]
-        img_path = os.path.join(self.img_dir, self.img_names[idx])
-        img = np.load(img_path, allow_pickle = True)[()]['mask_full']
-        img = morphology.remove_small_holes(img>0, area_threshold=10, connectivity=1)
+        img_path = os.path.join(self.label_dir, self.img_names[idx])
+        data = np.load(img_path, allow_pickle = True)[()]
+        
 
-        lab_path = os.path.join(self.label_dir, self.img_names[idx])
-        lab = np.load(lab_path, allow_pickle = True)[()]['mask_full']
-        lab = morphology.remove_small_holes(lab>0, area_threshold=10, connectivity=1)
-
-        image = torch.from_numpy(img).float()[None,:,:]
+        image = torch.from_numpy(data['mask_full']).float()[None,:,:]
         if self.transform != None: image = self.transform(image) 
         # image = torch.cat([image,self.XX[None,:,:],self.YY[None,:,:]],dim=0) 
         
         # Getting the cleaning trace
-        label = torch.from_numpy(lab).long()[None,:,:]
-        if self.transform != None: label = self.transform(label)
+        imgO = data['otrace']
+        imgX = data['xtrace']
+        label = np.zeros((2,imgO.shape[0],imgO.shape[1]),dtype=np.int_)
 
+        label[0,:,:][imgO > 0] = 1 # R channel, O mode
+        label[1,:,:][imgX > 0] = 1 # G channel, X mode
+
+        label = torch.from_numpy(label).long()
+        if self.transform != None: label = self.transform(label)
+    
         target = {}
         target["image"] = image
         target["mask"] = label

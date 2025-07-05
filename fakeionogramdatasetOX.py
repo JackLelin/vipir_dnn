@@ -19,6 +19,7 @@ class ParabolaIonoDatasetOX(Dataset):
         self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
         self.vipir_freqs = np.load('JM91J_2016014141141.npy', allow_pickle=True)[()]['vipir_freqs']
         # np.random.shuffle(self.img_names)
+        self.img_names.sort()
         self.img_names.tolist()
 
         original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).shape
@@ -63,7 +64,7 @@ class ParabolaIonoDatasetOX(Dataset):
         target = {}
         target["image"] = image
         target["mask"] = label.squeeze()
-        
+        target["filename"] = idx
         # Getting fof2
         # asymf = np.load(self.asymf_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
         # asymf_tensor = torch.zeros(8)

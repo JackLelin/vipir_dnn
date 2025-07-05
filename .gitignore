@@ -22,3 +22,5 @@ testset_fitting*
 seg_result*
 *.pth
 anchor_test*
+Testfitting_eval_model/*
+VIPIR_PROC/label*

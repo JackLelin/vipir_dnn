@@ -33,7 +33,7 @@ def pos_enc(idx : torch.Tensor , n_embd):
     pe = torch.cat([torch.sin(idx.view(-1,1)*omega),torch.cos(idx.view(-1,1)*omega)], dim = -1).view(-1,n_embd)
     return pe
 
-class Attention(nn.Module):
+class Attention(nn.Module): 
     """Downscaling with maxpool then doing attention"""
 
     def __init__(self, in_channel, p_drop = 0.2, n_embd = 1024, n_heads=2, patch_size=4, N=32):

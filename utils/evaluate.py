@@ -19,10 +19,11 @@ def evaluate(net, dataloader, device):
         mask_pred = net(image)
         imgO = torch.argmax(mask_pred[:,0:2,:,:],dim=1)
         imgX = torch.argmax(mask_pred[:,2:4,:,:],dim=1)
+        # imgX = imgO
+        # mask_pred = ((imgO + imgX) > 0).float()[:,None,:,:]
 
-        mask_pred = ((imgO + imgX) > 0).float()[:,None,:,:]
-
-        dice_score += dice_coeff(mask_pred, label, reduce_batch_first=False)
+        dice_score += dice_coeff(imgO, label[:,0,:,:], reduce_batch_first=False)
+        dice_score += dice_coeff(imgX, label[:,1,:,:], reduce_batch_first=False)
         del image; del mask_pred
     # net.train()
     return dice_score / max(num_val_batches, 1)

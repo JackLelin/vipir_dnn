@@ -7,7 +7,10 @@ from tqdm import tqdm
 import glob
 
 from utils.evaluate import evaluate
+from utils.dice_score import dice_coeff
+
 from unet import UNet, TransformerNet
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,7 +23,7 @@ from torch.optim import AdamW
 class DBCEF(nn.Module):
     """ DBCEF from paper https://arxiv.org/pdf/1906.05229 """
 
-    def __init__(self, epsilon: float = 1e-4, gamma: float = 2.5):
+    def __init__(self, epsilon: float = 1e-4, gamma: float = 3.5):
         super().__init__()
         self.softmax = nn.Softmax(dim=1)
         self.epsilon = epsilon
@@ -62,6 +65,7 @@ def test_on_TOPHAT(model, epoch_num):
             img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
             imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
+            # imgX = imgO
             imgX = torch.argmax(label1[2:4,:,:],dim=0).detach().numpy()
             fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
             plt.title(f'epoch{epoch_num}_{filename[i]}')
@@ -87,12 +91,12 @@ def test_on_TOPHAT(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 15
+epochs = 30
 batch_size = 5
 learning_rate = 1e-5
 val_percent = 0.1
 
-weight_decay = 5e-3
+weight_decay = 1e-3
 momentum = 0.2
 gradient_clipping = 1.0
 
@@ -112,7 +116,7 @@ loader_args = dict(batch_size=batch_size,  pin_memory=True) #os.cpu_count()num_w
 train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args)
 val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args)
 
-test_dataset = HandPickTraceDataset('VIPIR_PROC/proc', 'VIPIR_PROC/dog_pick', target_size= target_size, resize=resize)
+test_dataset = HandPickTraceDataset('VIPIR_PROC/labeled', target_size= target_size, resize=resize)
 test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_args)
 
 testfiles = glob.glob1('VIPIR_PROC/proc/','*.npy')
@@ -125,10 +129,13 @@ else: resize = None
 
 # XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-model = TransformerNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
-# model = UNet(n_channels=1, n_classes=4, in_dropout_p = 0.33, dropout_p=0.25)
+# model_att = TransformerNet(n_channels=1, n_classes=2, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
+# model_att.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_49_25000_loss0.7020.pth')['model_state_dict'])
+
+model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.35, dropout_p=0.35)
+# model.att = model_att.att
+# model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_15_25000_loss1.0712.pth')['model_state_dict'])
 model = model.to(device=device)
-# model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_10_18000.pth')['model_state_dict'])
 model.train()
 
 optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -140,7 +147,7 @@ losses = []
 val_losses = []
 test_losses = []
 
-checkpoint_N = 2500
+checkpoint_N = 3600
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
@@ -149,6 +156,8 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             inputs, labels = inputs.to(device), labels.to(device) 
             outputs = model(inputs)
             loss = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:]) + dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
+            # * dice_coeff(imgO, label[:,0,:,:], reduce_batch_first=False)
+            # loss = dbcefloss(outputs[:,0:2,:,:], torch.logical_or(labels[:,0,:,:],labels[:,1,:,:]).long())
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -156,7 +165,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             pbar.set_postfix(**{'loss (batch)': loss.item()})
             del inputs; del labels
             optimizer.zero_grad()
-            if (i)%checkpoint_N == 0: # validation for every checkpoint_N batch
+            if (i+1)%checkpoint_N == 0 or (i ==0 and epoch==0): # validation for every checkpoint_N batch
                 losses += [running_loss / (i+1)]
                 model.eval()
                 with torch.no_grad():
@@ -166,6 +175,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                         inputs, labels = inputs.to(device), labels.to(device)
                         outputs = model(inputs)                
                         loss = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:]) + dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
+                        # loss = dbcefloss(outputs[:,0:2,:,:], torch.logical_or(labels[:,0,:,:],labels[:,1,:,:]).long())
                         val_loss += loss.item()
                         del inputs; del labels
                     avg_val_loss = val_loss / len(val_loader)
@@ -186,7 +196,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                 ax.set_xlabel('Steps');ax.set_ylabel('Val loss')
                 ax = axs[2]
                 ax.plot(np.arange(len(test_losses))*checkpoint_N,test_losses)
-                ax.set_xlabel('Steps');ax.set_ylabel('Val loss')
+                ax.set_xlabel('Steps');ax.set_ylabel('Test Dice score')
                 fig.savefig(f'losses.png', bbox_inches='tight')
                 plt.close()
                 
@@ -194,7 +204,9 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': test_loss   ,
+                'test_loss': test_losses,
+                'val_loss': val_losses,
+                'train_loss': losses,
                 }, f'saved_model/TOPHAT_checkpoint_epoch_{epoch + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
             # break
                 
