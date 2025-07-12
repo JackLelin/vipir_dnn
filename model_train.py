@@ -43,6 +43,51 @@ class DBCEF(nn.Module):
         DBCEF = FCE/beta
 
         return -1*torch.sum(DBCEF)/N/y.size()[0]
+    
+@torch.no_grad()
+def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
+    model.eval()
+    val_loss = 0.0
+
+    for data in tqdm(val_loader, total=len(val_loader), desc='Validation round', unit='batch', position=0, leave=True):
+    # for ii, data in enumerate(val_loader, 0):
+        inputs, labels = data['image'], data['mask']
+        inputs, labels = inputs.to(device), labels.to(device)
+        outputs = model(inputs)                
+        loss = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:]) + dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
+        # loss = dbcefloss(outputs[:,0:2,:,:], torch.logical_or(labels[:,0,:,:],labels[:,1,:,:]).long())
+        val_loss += loss.item()
+        del inputs; del labels
+    avg_val_loss = val_loss / len(val_loader)
+    val_losses += [avg_val_loss]
+    test_loss = evaluate(model,test_loader,device)
+    test_losses += [test_loss.cpu()]
+    print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
+    # pick 5 random ionogram for testing
+    test_on_TOPHAT(model, epoch_num+1)
+    model.train()
+        
+    fig, axs = plt.subplots(ncols=3, nrows=1, figsize=(12, 4))
+    ax = axs[0]
+    ax.plot(np.arange(len(losses))*checkpoint_N,losses)
+    ax.set_xlabel('Steps');ax.set_ylabel('Training loss')
+    ax = axs[1]
+    ax.plot(np.arange(len(val_losses))*checkpoint_N,val_losses)
+    ax.set_xlabel('Steps');ax.set_ylabel('Val loss')
+    ax = axs[2]
+    ax.plot(np.arange(len(test_losses))*checkpoint_N,test_losses)
+    ax.set_xlabel('Steps');ax.set_ylabel('Test Dice score')
+    fig.savefig(f'losses.png', bbox_inches='tight')
+    plt.close()
+    
+    torch.save({
+    'epoch': epoch_num,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'test_loss': test_losses,
+    'val_loss': val_losses,
+    'train_loss': losses,
+    }, f'saved_model/TOPHAT_checkpoint_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_TOPHAT(model, epoch_num):    
@@ -147,7 +192,10 @@ losses = []
 val_losses = []
 test_losses = []
 
-checkpoint_N = 3600
+checkpoint_N = len(train_loader) / 2 # Check point every half epoch
+
+checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
+
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
@@ -165,49 +213,9 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             pbar.set_postfix(**{'loss (batch)': loss.item()})
             del inputs; del labels
             optimizer.zero_grad()
-            if (i+1)%checkpoint_N == 0 or (i ==0 and epoch==0): # validation for every checkpoint_N batch
+            if (i+1)%checkpoint_N == 0: # validation for every checkpoint_N batch
                 losses += [running_loss / (i+1)]
-                model.eval()
-                with torch.no_grad():
-                    val_loss = 0.0
-                    for ii, data in enumerate(val_loader, 0):
-                        inputs, labels = data['image'], data['mask']
-                        inputs, labels = inputs.to(device), labels.to(device)
-                        outputs = model(inputs)                
-                        loss = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:]) + dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
-                        # loss = dbcefloss(outputs[:,0:2,:,:], torch.logical_or(labels[:,0,:,:],labels[:,1,:,:]).long())
-                        val_loss += loss.item()
-                        del inputs; del labels
-                    avg_val_loss = val_loss / len(val_loader)
-                    val_losses += [avg_val_loss]
-                    test_loss = evaluate(model,test_loader,device)
-                    test_losses += [test_loss.cpu()]
-                    print(f'Epoch: {epoch + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
-                    # pick 5 random ionogram for testing
-                    test_on_TOPHAT(model, epoch+1)
-                model.train()
-                    
-                fig, axs = plt.subplots(ncols=3, nrows=1, figsize=(12, 4))
-                ax = axs[0]
-                ax.plot(np.arange(len(losses))*checkpoint_N,losses)
-                ax.set_xlabel('Steps');ax.set_ylabel('Training loss')
-                ax = axs[1]
-                ax.plot(np.arange(len(val_losses))*checkpoint_N,val_losses)
-                ax.set_xlabel('Steps');ax.set_ylabel('Val loss')
-                ax = axs[2]
-                ax.plot(np.arange(len(test_losses))*checkpoint_N,test_losses)
-                ax.set_xlabel('Steps');ax.set_ylabel('Test Dice score')
-                fig.savefig(f'losses.png', bbox_inches='tight')
-                plt.close()
-                
-                torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'test_loss': test_losses,
-                'val_loss': val_losses,
-                'train_loss': losses,
-                }, f'saved_model/TOPHAT_checkpoint_epoch_{epoch + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+                checkpoint_eval(model, epoch, i, val_losses, test_losses, losses)
             # break
                 
         print('-' * 20)
