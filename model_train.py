@@ -177,7 +177,7 @@ else: resize = None
 # model_att = TransformerNet(n_channels=1, n_classes=2, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 # model_att.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_49_25000_loss0.7020.pth')['model_state_dict'])
 
-model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.35, dropout_p=0.35)
+model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.4, dropout_p=0.4)
 # model.att = model_att.att
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_15_25000_loss1.0712.pth')['model_state_dict'])
 model = model.to(device=device)
