@@ -23,11 +23,12 @@ from torch.optim import AdamW
 class DBCEF(nn.Module):
     """ DBCEF from paper https://arxiv.org/pdf/1906.05229 """
 
-    def __init__(self, epsilon: float = 1e-4, gamma: float = 3.5):
+    def __init__(self, epsilon: float = 1e-4, gamma: float = 3.5, nue: float = 1.2):
         super().__init__()
         self.softmax = nn.Softmax(dim=1)
         self.epsilon = epsilon
         self.gamma = gamma
+        self.nue = nue
 
     def forward(self, input : torch.Tensor, target : torch.Tensor):
         y = torch.clamp(self.softmax(input), min = 1e-10, max = 1-1e-10)
@@ -35,7 +36,7 @@ class DBCEF(nn.Module):
 
         N = t.size()[-1]*t.size()[-2]
         beta = torch.sum(t,dim=(-1,-2))/N + self.epsilon 
-        beta = beta[:,:,None,None]
+        beta = beta[:,:,None,None]**self.nue
 
         CE = t*torch.clamp(torch.log(y), min = -100)
         FCE = (1-y)**self.gamma*CE
@@ -177,7 +178,7 @@ else: resize = None
 # model_att = TransformerNet(n_channels=1, n_classes=2, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 # model_att.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_49_25000_loss0.7020.pth')['model_state_dict'])
 
-model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.4, dropout_p=0.4)
+model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.35, dropout_p=0.35)
 # model.att = model_att.att
 # model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_15_25000_loss1.0712.pth')['model_state_dict'])
 model = model.to(device=device)
