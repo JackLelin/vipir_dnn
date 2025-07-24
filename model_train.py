@@ -173,14 +173,10 @@ elif resize == 'pad':
     resize_tr = Pad([(target_size[1] - original_size[1])//2, (target_size[0] - original_size[0])//2])
 else: resize = None
 
-# XX, YY = torch.meshgrid(torch.linspace(0,1,target_size[0],dtype=torch.float32),torch.linspace(0,1,target_size[1],dtype=torch.float32))
 
-# model_att = TransformerNet(n_channels=1, n_classes=2, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
-# model_att.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_49_25000_loss0.7020.pth')['model_state_dict'])
 
 model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.35, dropout_p=0.35)
-# model.att = model_att.att
-# model.load_state_dict(torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_15_25000_loss1.0712.pth')['model_state_dict'])
+
 model = model.to(device=device)
 model.train()
 
@@ -193,9 +189,20 @@ losses = []
 val_losses = []
 test_losses = []
 
+# load_checkpoint = torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_30_45000_loss1.3968.pth')
+# model.load_state_dict(load_checkpoint['model_state_dict'])
+# optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
+# epcoh_elapsed = load_checkpoint['epoch']+1
+# test_losses   = load_checkpoint['test_loss']
+# val_losses    = load_checkpoint['val_loss']
+# losses   = load_checkpoint['train_loss']
+# epochs = 10
+# print('epcoh_elapsed: ', epcoh_elapsed)
+
 checkpoint_N = len(train_loader) / 2 # Check point every half epoch
 
-checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
+if epcoh_elapsed ==0 :
+    checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
 
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
@@ -204,9 +211,12 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             inputs, labels = data['image'], data['mask']
             inputs, labels = inputs.to(device), labels.to(device) 
             outputs = model(inputs)
-            loss = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:]) + dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
-            # * dice_coeff(imgO, label[:,0,:,:], reduce_batch_first=False)
-            # loss = dbcefloss(outputs[:,0:2,:,:], torch.logical_or(labels[:,0,:,:],labels[:,1,:,:]).long())
+            loss  = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:])*(1-dice_coeff(
+                        nn.functional.softmax(outputs[:,0:2,:,:], dim = 1), 
+                        nn.functional.one_hot(labels[:,0,:,:], num_classes = 2).permute(0, 3, 1, 2).contiguous()))
+            loss += dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])*(1-dice_coeff(
+                        nn.functional.softmax(outputs[:,2:4,:,:], dim = 1), 
+                        nn.functional.one_hot(labels[:,1,:,:], num_classes = 2).permute(0, 3, 1, 2).contiguous()))
             loss.backward()
             optimizer.step()
             running_loss += loss.item()

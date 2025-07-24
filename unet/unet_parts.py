@@ -33,58 +33,58 @@ def pos_enc(idx : torch.Tensor , n_embd):
     pe = torch.cat([torch.sin(idx.view(-1,1)*omega),torch.cos(idx.view(-1,1)*omega)], dim = -1).view(-1,n_embd)
     return pe
 
-class Attention(nn.Module): 
-    """Downscaling with maxpool then doing attention"""
+# class Attention(nn.Module): 
+#     """Downscaling with maxpool then doing attention"""
 
-    def __init__(self, in_channel, p_drop = 0.2, n_embd = 1024, n_heads=2, patch_size=4, N=32):
-        super().__init__()
+#     def __init__(self, in_channel, p_drop = 0.2, n_embd = 1024, n_heads=2, patch_size=4, N=32):
+#         super().__init__()
 
-        # calculate all dimensions
-        self.N = N # the input image is NxN (Batch,Channel,N,N)
-        M = N//patch_size #image is devided into MxM patches
-        self.n_patch = in_channel * patch_size **2 # flatten patch size
-        self.n_embd = n_embd # attention embedding dimension
+#         # calculate all dimensions
+#         self.N = N # the input image is NxN (Batch,Channel,N,N)
+#         M = N//patch_size #image is devided into MxM patches
+#         self.n_patch = in_channel * patch_size **2 # flatten patch size
+#         self.n_embd = n_embd # attention embedding dimension
 
-        # initiate modules for patch and unpatch
-        self.patch_size = patch_size
-        self.unfold = torch.nn.Unfold(kernel_size=patch_size, stride=patch_size)
-        self.fold = torch.nn.Fold(N,kernel_size=patch_size, stride=patch_size) # fold the sequency back to 32x32 images
+#         # initiate modules for patch and unpatch
+#         self.patch_size = patch_size
+#         self.unfold = torch.nn.Unfold(kernel_size=patch_size, stride=patch_size)
+#         self.fold = torch.nn.Fold(N,kernel_size=patch_size, stride=patch_size) # fold the sequency back to 32x32 images
 
-        # intitiate the attention modules
-        self.c_attn = nn.Linear(self.n_patch, 3 * self.n_embd, bias=False) # linear block for finding QKV vectors
-        self.mlp = nn.Sequential(nn.Linear(self.n_embd, self.n_patch, bias=False),
-                                nn.ReLU(inplace=True)) # up coversion 
-        self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
-        self.relu = nn.ReLU(inplace=True)
-        self.ln = nn.GroupNorm(1,M*M) #layernorm for attention block, M*M is the sequence length
+#         # intitiate the attention modules
+#         self.c_attn = nn.Linear(self.n_patch, 3 * self.n_embd, bias=False) # linear block for finding QKV vectors
+#         self.mlp = nn.Sequential(nn.Linear(self.n_embd, self.n_patch, bias=False),
+#                                 nn.ReLU(inplace=True)) # up coversion 
+#         self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.ln = nn.GroupNorm(1,M*M) #layernorm for attention block, M*M is the sequence length
 
-        # positional encoding        
-        x_enc = torch.arange(M).repeat(M)
-        y_enc = torch.arange(M).view(-1,1).repeat([1,M]).flatten()
-        x_enc = pos_enc(x_enc, self.n_patch//2)
-        y_enc = pos_enc(y_enc, self.n_patch//2)
-        self.register_buffer('pe', torch.cat([x_enc, y_enc], dim=-1)[None,:,:], persistent=False)  #2D position encoding, first half is for x-pos, second half is for y-pos
+#         # positional encoding        
+#         x_enc = torch.arange(M).repeat(M)
+#         y_enc = torch.arange(M).view(-1,1).repeat([1,M]).flatten()
+#         x_enc = pos_enc(x_enc, self.n_patch//2)
+#         y_enc = pos_enc(y_enc, self.n_patch//2)
+#         self.register_buffer('pe', torch.cat([x_enc, y_enc], dim=-1)[None,:,:], persistent=False)  #2D position encoding, first half is for x-pos, second half is for y-pos
 
-    def forward(self, x):
-        # assetion of the input size
-        B, C, H, W = x.size()
-        assert H % self.patch_size == 0 and W % self.patch_size == 0
-        assert H == self.N and W == self.N
+#     def forward(self, x):
+#         # assetion of the input size
+#         B, C, H, W = x.size()
+#         assert H % self.patch_size == 0 and W % self.patch_size == 0
+#         assert H == self.N and W == self.N
 
-        # message the input image patchify the image for attention
-        xp = self.unfold(x) # x: B, C*p*p, L
-        xp = xp.permute(0,2,1).contiguous() # x: B,L,C*p*p = B,T,E (batch size, sequence length, embedding dimensionality:n_embd)
-        xp += self.pe #adding position encoding
-        xp = self.ln(xp)
-        # attention block
-        q, k, v  = self.c_attn(xp).split(self.n_embd, dim=2)
-        y, _ = self.mhatt(q, k, v)
-        y = self.relu(y)
-        y = self.mlp(y)
-        y = self.fold(y.permute(0,2,1)) # B,L,C*p*p -> x: B,C*p*p,L
+#         # message the input image patchify the image for attention
+#         xp = self.unfold(x) # x: B, C*p*p, L
+#         xp = xp.permute(0,2,1).contiguous() # x: B,L,C*p*p = B,T,E (batch size, sequence length, embedding dimensionality:n_embd)
+#         xp += self.pe #adding position encoding
+#         xp = self.ln(xp)
+#         # attention block
+#         q, k, v  = self.c_attn(xp).split(self.n_embd, dim=2)
+#         y, _ = self.mhatt(q, k, v)
+#         y = self.relu(y)
+#         y = self.mlp(y)
+#         y = self.fold(y.permute(0,2,1)) # B,L,C*p*p -> x: B,C*p*p,L
         
-        x += y
-        return x
+#         x += y
+#         return x
 
 class Transformer(nn.Module):
     """adding positional encoding and multiple Transformer blocks"""
