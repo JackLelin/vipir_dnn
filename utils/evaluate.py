@@ -2,9 +2,10 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from .dice_score import dice_coeff
+from torch.utils.data import DataLoader
 
 @torch.inference_mode()
-def evaluate(net, dataloader, device):
+def evaluate(net :torch.nn.Module, dataloader :DataLoader, device) ->torch.Tensor|float:
     # net.eval()
     num_val_batches = len(dataloader)
 
@@ -25,8 +26,10 @@ def evaluate(net, dataloader, device):
         dice_score += dice_coeff(imgO, label[:,0,:,:], reduce_batch_first=False)
         dice_score += dice_coeff(imgX, label[:,1,:,:], reduce_batch_first=False)
         del image; del mask_pred
+
+    dice_score = dice_score / max(num_val_batches, 1)
     # net.train()
-    return dice_score / max(num_val_batches, 1)
+    return dice_score
 
 #     # iterate over the validation set
 #     with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):

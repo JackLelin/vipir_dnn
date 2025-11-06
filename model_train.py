@@ -20,10 +20,13 @@ from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
 
+batch_size = 10
+save_model_path = '/media/jackle/LData/MLvipir_save/save_model_latest/'
+
 class DBCEF(nn.Module):
     """ DBCEF from paper https://arxiv.org/pdf/1906.05229 """
 
-    def __init__(self, epsilon: float = 1e-4, gamma: float = 3.5, nue: float = 1.2):
+    def __init__(self, epsilon: float = 1e-4, gamma: float = 3.3, nue: float = 1.15):
         super().__init__()
         self.softmax = nn.Softmax(dim=1)
         self.epsilon = epsilon
@@ -62,7 +65,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     avg_val_loss = val_loss / len(val_loader)
     val_losses += [avg_val_loss]
     test_loss = evaluate(model,test_loader,device)
-    test_losses += [test_loss.cpu()]
+    test_losses += [test_loss.cpu()] # type: ignore
     print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
     # pick 5 random ionogram for testing
     test_on_TOPHAT(model, epoch_num+1)
@@ -88,14 +91,14 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'saved_model/TOPHAT_checkpoint_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/TOPHAT_checkpoint_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_TOPHAT(model, epoch_num):    
     with torch.inference_mode():
         img = []
         filename = []
-        for _ in range(5):
+        for _ in range(batch_size):
             file = testfiles[np.random.randint(0,len(testfiles)-1)]
             filename += [file]
             testdata = np.load('VIPIR_PROC/proc/' + file, allow_pickle=True, fix_imports=True)[()]
@@ -107,7 +110,7 @@ def test_on_TOPHAT(model, epoch_num):
         img = torch.cat(img,dim=0)
         img = img.to('cuda')
         label = model(img)
-        for i in range(5):
+        for i in range(batch_size):
             img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
             imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
@@ -137,12 +140,11 @@ def test_on_TOPHAT(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 30
-batch_size = 5
-learning_rate = 1e-5
+epochs = 45
+learning_rate = 1e-5 
 val_percent = 0.1
 
-weight_decay = 1e-3
+weight_decay = 1e-3 
 momentum = 0.2
 gradient_clipping = 1.0
 
@@ -159,11 +161,11 @@ train_set, val_set = random_split(train_dataset, [n_train, n_val], generator=tor
 # 3. Create data loaders
 loader_args = dict(batch_size=batch_size,  pin_memory=True) #os.cpu_count()num_workers=5,
 
-train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args)
-val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args)
+train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args) # type: ignore
+val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args) # type: ignore
 
 test_dataset = HandPickTraceDataset('VIPIR_PROC/labeled', target_size= target_size, resize=resize)
-test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_args)
+test_loader = DataLoader(test_dataset, shuffle=True, drop_last=True, **loader_args) # type: ignore
 
 testfiles = glob.glob1('VIPIR_PROC/proc/','*.npy')
 
@@ -175,7 +177,7 @@ else: resize = None
 
 
 
-model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.35, dropout_p=0.35)
+model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 
 model = model.to(device=device)
 model.train()
@@ -189,17 +191,17 @@ losses = []
 val_losses = []
 test_losses = []
 
-# load_checkpoint = torch.load('saved_model/'+'TOPHAT_checkpoint_epoch_30_45000_loss1.3968.pth')
+# load_checkpoint = torch.load(save_model_path+'TOPHAT_checkpoint_epoch_37_18000_loss1.3966.pth')
 # model.load_state_dict(load_checkpoint['model_state_dict'])
 # optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
 # epcoh_elapsed = load_checkpoint['epoch']+1
 # test_losses   = load_checkpoint['test_loss']
 # val_losses    = load_checkpoint['val_loss']
 # losses   = load_checkpoint['train_loss']
-# epochs = 10
+# epochs = 8
 # print('epcoh_elapsed: ', epcoh_elapsed)
 
-checkpoint_N = len(train_loader) / 2 # Check point every half epoch
+checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
 if epcoh_elapsed ==0 :
     checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
@@ -211,12 +213,8 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             inputs, labels = data['image'], data['mask']
             inputs, labels = inputs.to(device), labels.to(device) 
             outputs = model(inputs)
-            loss  = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:])*(1-dice_coeff(
-                        nn.functional.softmax(outputs[:,0:2,:,:], dim = 1), 
-                        nn.functional.one_hot(labels[:,0,:,:], num_classes = 2).permute(0, 3, 1, 2).contiguous()))
-            loss += dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])*(1-dice_coeff(
-                        nn.functional.softmax(outputs[:,2:4,:,:], dim = 1), 
-                        nn.functional.one_hot(labels[:,1,:,:], num_classes = 2).permute(0, 3, 1, 2).contiguous()))
+            loss  = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:])
+            loss += dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -231,3 +229,8 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                 
         print('-' * 20)
         epcoh_elapsed += 1
+    
+        if epoch % 15 == 0:
+            learning_rate = learning_rate * 0.2
+            weight_decay = weight_decay * 0.5
+            optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)

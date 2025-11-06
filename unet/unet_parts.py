@@ -10,11 +10,13 @@ class DoubleConv(nn.Module):
     """Change to layernorm"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.norm = nn.GroupNorm(in_channels, in_channels)
+        # self.norm = nn.GroupNorm(in_channels, in_channels)
+        self.norm = nn.BatchNorm2d(in_channels)
         self.conv = nn.Sequential(
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True),
-            nn.GroupNorm(out_channels, out_channels),
+            # nn.GroupNorm(out_channels, out_channels),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=True),
         )
@@ -147,7 +149,8 @@ class Transformer_element(nn.Module):
         self.mlp = nn.Sequential(nn.Linear(self.n_embd, self.n_embd, bias=False),
                                 nn.ReLU(inplace=True)) 
         self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
-        self.relu = nn.ReLU(inplace=True)
+        # self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.GELU()
         self.ln = nn.GroupNorm(1,n_token) #layernorm for attention block, M*M is the sequence length
 
     def forward(self, x):
@@ -168,8 +171,8 @@ class Down(nn.Module):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
             nn.MaxPool2d(2),
-            DoubleConv(in_channels, out_channels),
-            nn.GroupNorm(out_channels, out_channels)
+            DoubleConv(in_channels, out_channels)
+            # nn.GroupNorm(out_channels, out_channels)
         )
 
     def forward(self, x):
@@ -181,12 +184,14 @@ class Up(nn.Module):
 
     def __init__(self, in_channels, out_channels, kernel_size=2):
         super().__init__()
-        self.ln = nn.GroupNorm(in_channels, in_channels)
+        # self.ln = nn.GroupNorm(in_channels, in_channels)
+        self.norm = nn.BatchNorm2d(in_channels)
         self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=2)
         self.conv = DoubleConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
-        x1 = self.ln(x1)
+        # x1 = self.ln(x1)
+        x1 = self.norm(x1)
         x1 = self.up(x1)
         # input is CHW
         diffY = x2.size()[2] - x1.size()[2]
@@ -205,9 +210,14 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.norm = nn.BatchNorm2d(in_channels)
         self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=1)
         self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
     def forward(self, x):
-        y = self.conv1(x) + x
+        x = self.relu(x)
+        y = self.conv1(x) 
+        y = self.relu(y)+ x
+        y = self.norm(y)
         y = self.conv2(y)
         return y

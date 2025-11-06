@@ -38,7 +38,7 @@ class ParabolaIonoDatasetOX(Dataset):
 
     def __getitem__(self, idx):
         #crop_region:[120:-10,30:390]
-        img_path = os.path.join(self.img_dir, self.img_names[idx])
+        img_path = os.path.join(self.img_dir, self.img_names[idx]) # type: ignore
         img = np.array(Image.open(img_path))
         image = torch.from_numpy((img>128).astype(np.float32)).float()[None,:,:]
         if self.transform != None: image = self.transform(image)
