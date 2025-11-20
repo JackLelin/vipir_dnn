@@ -16,11 +16,8 @@ class GenTrain():
         self.ipp = ipp
 
         self.training_dir = training_dir
-        # noise_dir = 'VIPIR_PROC/Dog_noise/'
-        noise_files = glob.glob1(noise_dir,'*.npy')
-        self.noise_list = []
-        for f in noise_files:
-            self.noise_list += [np.load(noise_dir + noise_files[np.random.randint(0, len(noise_files)-1)], allow_pickle=True)[()]['noise_list']]
+        self.noise_dir = 'VIPIR_PROC/Dog_noise/'
+        self.noise_files = glob.glob1(noise_dir,'*.npy')
 
     def fps_parabolic(self, a: np.ndarray, z: np.ndarray, beta:float=7) -> np.ndarray:
         # print(a)
@@ -188,8 +185,7 @@ class GenTrain():
                 noise_y += (loc_y + np.random.uniform(-size_y/2,size_y/2,n)).astype(np.int_).tolist()
         else :
             percent = 0.7
-            # noise_list = np.load(noise_dir + noise_files[np.random.randint(0, len(noise_files)-1)], allow_pickle=True)[()]['noise_list']
-            noise_list = self.noise_list[np.random.randint(0, len(self.noise_list)-1)]
+            noise_list = np.load(self.noise_dir + self.noise_files[np.random.randint(0, len(self.noise_files)-1)], allow_pickle=True)[()]['noise_list']
             random.shuffle(noise_list)
             delta_d = 100
             for cord_x, cord_y in noise_list[:int(len(noise_list) * percent)]:
@@ -263,7 +259,7 @@ class GenTrain():
         # print(fx_peaks)
         
         if fo_peaks.shape[0] >0 and fx_peaks.shape[0] >0:
-            if np.random.uniform(0,1)<0.3:  # 30% chance cutting the first cusps
+            if np.random.uniform(0,1)<0.2:  # 20% chance cutting the first cusps
                 fo_start = fvsO[fo_peaks[-1]]
                 fx_start = fvsX[fx_peaks[-1]]
 
@@ -288,6 +284,7 @@ class GenTrain():
 
         # struct = np.array([[0,1,0],[1,1,1],[0,1,0]])
         struct = (np.random.rand(3, 3)<0.5).astype(np.int_)
+        struct[1,1] = 1
         omode = morphology.closing(omode, struct)
         xmode = morphology.closing(xmode, struct)
         
@@ -306,6 +303,8 @@ class GenTrain():
         
         if np.random.uniform(0,1) < 0.4: #30% chance no multihop
             multihop_map = np.zeros(multihop_map.shape, dtype=np.uint8)
+        else:
+            multihop_map = multihop_map.astype(np.uint8)
 
         self.add_break_in_trace(fvsO,vhsO,omode)
         self.add_break_in_trace(fvsX,vhsX,xmode)
@@ -319,16 +318,18 @@ class GenTrain():
         omode = morphology.remove_small_holes(omode, area_threshold=10, connectivity=1)
         xmode = morphology.remove_small_holes(xmode, area_threshold=10, connectivity=1)
         
+        opres = (np.sum(O_trace,axis=0)>0).astype(np.int_)
+        xpres = (np.sum(X_trace,axis=0)>0).astype(np.int_)
+
         if np.random.uniform(0,1) < 0.05:# 0.05: # 5% chance negative data
             omode = np.zeros(omode.shape, dtype=np.uint8)
             xmode = np.zeros(xmode.shape, dtype=np.uint8)
             multihop_map = np.zeros(multihop_map.shape, dtype=np.uint8)
+            opres *= 0
+            xpres *= 0
 
-        # omode_data = np.zeros((*omode.shape,3), dtype=np.uint8)
-        # omode_data[:,:,0] = np.flip(omode>0,axis=0) * 255
-    
-        # xmode_data = np.zeros((*xmode.shape,3), dtype=np.uint8)
-        # xmode_data[:,:,1] = np.flip(xmode>0,axis=0) * 255
+        ovhidx = np.array([np.argmin(np.abs(vhsO[np.argmin(np.abs(fvsO - self.freqs[i]))] - self.hts)) if i !=0 else 0 for i in opres])
+        xvhidx = np.array([np.argmin(np.abs(vhsX[np.argmin(np.abs(fvsX - self.freqs[i]))] - self.hts)) if i !=0 else 0 for i in xpres])
 
         fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
         ax1 = axes[0]
@@ -347,14 +348,22 @@ class GenTrain():
 
         ax2 = axes[1]
 
-        ax2.imshow((omode>0).astype(np.int_) + 2* O_trace,origin='lower')
+        # ax2.imshow((omode>0).astype(np.int_) + 2* O_trace,origin='lower')
+        ax2.imshow(np.vstack([opres]*omode.shape[0]))
+        ax2.scatter(np.arange(opres.shape[0]), ovhidx)
         ax2.set_title('O-mode trace')
-        ax2.set_axis_off()
+        # ax2.set_axis_off()
+        ax2.set_xlim(0,408)
+        ax2.set_ylim(0,512)
 
         ax3 = axes[2]
-        ax3.imshow((xmode>0).astype(np.int_) + 2*X_trace,origin='lower')
+        # ax3.imshow((xmode>0).astype(np.int_) + 2*X_trace,origin='lower')
+        ax3.imshow(np.vstack([xpres]*xmode.shape[0]))
+        ax3.scatter(np.arange(xpres.shape[0]), xvhidx)
         ax3.set_title('X-mode trace')
-        ax3.set_axis_off()
+        # ax3.set_axis_off()
+        ax3.set_xlim(0,408)
+        ax3.set_ylim(0,512)
 
         ax4 = axes[3]
         ax4.imshow((omode+xmode+noise_map+multihop_map)>0,origin='lower')
@@ -369,17 +378,64 @@ class GenTrain():
             imgTrain = Image.fromarray(np.flip((omode+xmode+noise_map+multihop_map)>0,axis=0).astype(dtype=np.uint8)*255, 'L')
             imgTrain.save(f"{self.training_dir}/train/{file_name}")
             
-            omode_data = np.zeros((*omode.shape,3), dtype=np.uint8)
-            omode_data[:,:,0] = np.flip(O_trace>0,axis=0) * 255
+            np.save(f"{self.training_dir}/npy/{file_name}", {'opres':opres, 'xpres':xpres, 'ovhidx':ovhidx, 'xvhidx':xvhidx})
+            # omode_data = np.zeros((*omode.shape,3), dtype=np.uint8)
+            # omode_data[:,:,0] = np.flip(O_trace>0,axis=0) * 255
         
-            xmode_data = np.zeros((*xmode.shape,3), dtype=np.uint8)
-            xmode_data[:,:,1] = np.flip(X_trace>0,axis=0) * 255
+            # xmode_data = np.zeros((*xmode.shape,3), dtype=np.uint8)
+            # xmode_data[:,:,1] = np.flip(X_trace>0,axis=0) * 255
 
-            imgO = Image.fromarray(omode_data, 'RGB')
-            imgX = Image.fromarray(xmode_data, 'RGB')
+            # imgO = Image.fromarray(omode_data, 'RGB')
+            # imgX = Image.fromarray(xmode_data, 'RGB')
 
-            imgO.save(f"{self.training_dir}/O/{file_name}")
-            imgX.save(f"{self.training_dir}/X/{file_name}")
-
+            # imgO.save(f"{self.training_dir}/O/{file_name}")
+            # imgX.save(f"{self.training_dir}/X/{file_name}")
+        else:
+            plt.show()
+        return 
         # np.save(f"{self.training_dir}/asym_f/{file_name}", {'asym_fO':asym_fO, 'asym_fX':asym_fX})
+
+if __name__ == "__main__":
+    import datetime
+    from ISRpy import beampack
+    import scipy.constants as const
+
+    jro0 = beampack.jrobeam
+    training_dir = 'training_data'
+
+    d = np.load('JM91J_2016014141141.npy', allow_pickle=True)[()]
+    freqs = d['vipir_freqs']
+    hts = d['vipir_hts']
+
+    noise_dir = 'VIPIR_PROC/Dog_noise/'
+    noise_files = glob.glob1(noise_dir,'*.npy')
+    # print(noise_files)
+    ipp = 5.6e3*0.15
+    print(ipp)
+    ipp - hts[-1]*1
+    gt = GenTrain(freqs,hts,ipp,training_dir,noise_dir)
+    dt0 = datetime.datetime(2015,4,15)
+    igrf_year = dt0.year + (dt0-datetime.datetime(dt0.year,1,1)).total_seconds() / (
+            datetime.datetime(dt0.year+1,1,1)-datetime.datetime(dt0.year,1,1)).total_seconds()
+
+    dz=0.5 # resolution in km --- 0.1 is for good resolution, 0.5 for speed
+    zmax = 800
+    Z = np.arange(0.01,zmax,dz)
+
+    fes = []
+    for iZ in Z:
+        r,geoc_lat,lon,aspect,B = jro0.aspect_angle(igrf_year,jro0.xyz0 + jro0.zenith0 * iZ)
+        fes += [const.e * np.linalg.norm(B) * 1e-9 / const.m_e /1e6 /2/np.pi] #MHz
+    fes = np.array(fes)
+
+    gt.graph_generate(fes, Z, dz, savedata = False)
+
+    if True:
+        from joblib import Parallel, delayed
+        import multiprocessing as mp
+
+        para_func = lambda x : gt.graph_generate(fes, Z, dz, savedata = True)
+
+        # Use all available CPU cores to generate the graphs in parallel
+        Parallel(n_jobs=mp.cpu_count()-0)(delayed(para_func)(_) for _ in range(10000))
 

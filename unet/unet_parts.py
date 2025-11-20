@@ -221,3 +221,26 @@ class OutConv(nn.Module):
         y = self.norm(y)
         y = self.conv2(y)
         return y
+    
+
+class ColumnFC(nn.Module):
+    def __init__(self, input_size, in_channels, out_channels):
+        super(ColumnFC, self).__init__()
+        self.fc = nn.Linear(input_size[0] * in_channels, out_channels)   # 2048 -> 4
+        self.relu = nn.ReLU(inplace=True)
+        self.input_size = input_size
+    def forward(self, x):
+        # x: [B, 4, 512, 408]
+        B = x.size(0)
+        
+        x = self.relu(x)
+        # shape: [B, 408, 4*512]
+        x = x.permute(0, 3, 1, 2).contiguous().view(B, self.input_size[1], -1)
+
+        # Apply FC to each column
+        out = self.fc(x)
+        # shape: [B, 408, 2]
+                
+        x = x.permute(0, 2, 1).contiguous().view(B, -1, self.input_size[1])
+        # Output: [B, 2, 408]
+        return out

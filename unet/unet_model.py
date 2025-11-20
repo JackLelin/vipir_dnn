@@ -10,7 +10,7 @@ class UNet(nn.Module):
         self.n_classes = n_classes
 
         n_att_channel = 2
-        self.att = Transformer(n_heads=1, n_embd=1024, n_blocks=16, p_drop=dropout_p, n_token=input_size[1], n_embd_in=input_size[0], n_channel_out=n_att_channel)
+        self.att = Transformer(n_heads=1, n_embd=1024, n_blocks=8, p_drop=dropout_p, n_token=input_size[1], n_embd_in=input_size[0], n_channel_out=n_att_channel)
         
         self.inc = (DoubleConv(n_att_channel, 64))
         self.down1 = (Down(64, 128))
@@ -23,6 +23,7 @@ class UNet(nn.Module):
         self.up4 = (Up(128, 64, up_kernel_size))
         self.outc = (OutConv(64, n_classes))
 
+        self.cfc = ColumnFC(input_size, n_classes, 2)
         # self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
 
@@ -48,6 +49,8 @@ class UNet(nn.Module):
         xu = self.up4(xu, x1)
         # xu = self.drop_layer(xu)
         logits = self.outc(torch.cat([xd]*64 , dim=1) + xu) #
+
+        logits = self.cfc(logits)
         return logits
 
     # def use_checkpointing(self):

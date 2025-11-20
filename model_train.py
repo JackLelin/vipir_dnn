@@ -8,6 +8,7 @@ import glob
 
 from utils.evaluate import evaluate
 from utils.dice_score import dice_coeff
+from utils.loss_functions import DBCEF
 
 from unet import UNet, TransformerNet
 
@@ -23,30 +24,7 @@ from torch.optim import AdamW
 batch_size = 10
 save_model_path = '/media/jackle/LData/MLvipir_save/save_model_latest/'
 
-class DBCEF(nn.Module):
-    """ DBCEF from paper https://arxiv.org/pdf/1906.05229 """
 
-    def __init__(self, epsilon: float = 1e-4, gamma: float = 3.3, nue: float = 1.15):
-        super().__init__()
-        self.softmax = nn.Softmax(dim=1)
-        self.epsilon = epsilon
-        self.gamma = gamma
-        self.nue = nue
-
-    def forward(self, input : torch.Tensor, target : torch.Tensor):
-        y = torch.clamp(self.softmax(input), min = 1e-10, max = 1-1e-10)
-        t = nn.functional.one_hot(target, num_classes = 2).permute(0, 3, 1, 2).contiguous()
-
-        N = t.size()[-1]*t.size()[-2]
-        beta = torch.sum(t,dim=(-1,-2))/N + self.epsilon 
-        beta = beta[:,:,None,None]**self.nue
-
-        CE = t*torch.clamp(torch.log(y), min = -100)
-        FCE = (1-y)**self.gamma*CE
-        # FCE = CE
-        DBCEF = FCE/beta
-
-        return -1*torch.sum(DBCEF)/N/y.size()[0]
     
 @torch.no_grad()
 def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
@@ -140,7 +118,7 @@ def test_on_TOPHAT(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 45
+epochs = 20
 learning_rate = 1e-5 
 val_percent = 0.1
 
@@ -159,7 +137,7 @@ n_train = len(train_dataset) - n_val
 train_set, val_set = random_split(train_dataset, [n_train, n_val], generator=torch.Generator())
 
 # 3. Create data loaders
-loader_args = dict(batch_size=batch_size,  pin_memory=True) #os.cpu_count()num_workers=5,
+loader_args = dict(batch_size=batch_size,  pin_memory=True, num_workers=0) #os.cpu_count()num_workers=5,
 
 train_loader = DataLoader(train_set, shuffle=True, drop_last=True, **loader_args) # type: ignore
 val_loader = DataLoader(val_set, shuffle=True, drop_last=True, **loader_args) # type: ignore
@@ -180,7 +158,7 @@ else: resize = None
 model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 
 model = model.to(device=device)
-model.train()
+model.eval()
 
 optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 dbcefloss = DBCEF()
@@ -203,34 +181,37 @@ test_losses = []
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
-if epcoh_elapsed ==0 :
-    checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
+# if epcoh_elapsed ==0 :
+#     checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
 
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
-            inputs, labels = data['image'], data['mask']
+            inputs, labels = data['image'], data['gt']
             inputs, labels = inputs.to(device), labels.to(device) 
             outputs = model(inputs)
-            loss  = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:])
-            loss += dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-            pbar.update(inputs.shape[0])
-            pbar.set_postfix(**{'loss (batch)': loss.item()})
-            del inputs; del labels
-            optimizer.zero_grad()
-            if (i+1)%checkpoint_N == 0: # validation for every checkpoint_N batch
-                losses += [running_loss / (i+1)]
-                checkpoint_eval(model, epoch, i, val_losses, test_losses, losses)
+
+            print(outputs.size(), labels.size())
+            break
+            # loss  = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:])
+            # loss += dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
+            # loss.backward()
+            # optimizer.step()
+            # running_loss += loss.item()
+            # pbar.update(inputs.shape[0])
+            # pbar.set_postfix(**{'loss (batch)': loss.item()})
+            # del inputs; del labels
+            # optimizer.zero_grad()
+            # if (i+1)%checkpoint_N == 0: # validation for every checkpoint_N batch
+            #     losses += [running_loss / (i+1)]
+            #     checkpoint_eval(model, epoch, i, val_losses, test_losses, losses)
             # break
                 
-        print('-' * 20)
-        epcoh_elapsed += 1
+        # print('-' * 20)
+        # epcoh_elapsed += 1
     
-        if epoch % 15 == 0:
-            learning_rate = learning_rate * 0.2
-            weight_decay = weight_decay * 0.5
-            optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        # if epoch % 10 == 0:
+        #     learning_rate = learning_rate * 0.5
+        #     weight_decay = weight_decay * 0.5
+        #     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
