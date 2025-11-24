@@ -32,7 +32,7 @@ class ParabolaIonoDatasetOX(Dataset):
         elif resize == 'pad':
             self.transform = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
         
-        self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
+        # self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
     def __len__(self):
         return len(self.img_names)
 
@@ -66,19 +66,21 @@ class ParabolaIonoDatasetOX(Dataset):
         # target["filename"] = idx
 
         data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
-        opres = torch.from_numpy(data['opres'])[:,None]
-        xpres = torch.from_numpy(data['xpres'])[:,None]
-        ovhidx = torch.from_numpy(data['ovhidx'])[:,None]
-        xvhidx = torch.from_numpy(data['xvhidx'])[:,None]
+        opres = torch.from_numpy(data['opres'])[None,:].float() 
+        xpres = torch.from_numpy(data['xpres'])[None,:].float() 
+        ovhidx = torch.from_numpy(data['ovhidx'])[None,:].float() 
+        xvhidx = torch.from_numpy(data['xvhidx'])[None,:].float() 
 
-        target["gt"] = torch.cat([opres,ovhidx,xpres,xvhidx],dim=-1)
+        ovhidx /= self.target_size[0]
+        xvhidx /= self.target_size[0]
+        target["gt"] = torch.cat([opres,ovhidx,xpres,xvhidx],dim=0)
 
         return target
     
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
-    loader_args = dict(batch_size=5,  pin_memory=True, num_workers=10)
+    loader_args = dict(batch_size=1,  pin_memory=True, num_workers=10)
     train_dataset = ParabolaIonoDatasetOX('training_data', target_size= [512,408], resize='pad')
     train_loader = DataLoader(train_dataset, shuffle=True, drop_last=True, **loader_args)
 

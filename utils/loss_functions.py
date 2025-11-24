@@ -34,7 +34,7 @@ class BCE_MSE(nn.Module):
         self.epsilon = epsilon
         self.beta_bce = beta_bce
 
-    def forward(self, pred, y_row, y_mask,):
+    def forward(self, pred, ground_t):
         """
         Combined BCE + masked MSE loss.
 
@@ -45,20 +45,27 @@ class BCE_MSE(nn.Module):
             beta_bce: weighting for BCE term
         """
         # Split outputs
-        pred_row = torch.sigmoid(pred[:,:,0])  # ensure in [0,1]
-        pred_exist = torch.sigmoid(pred[:,:,1])  # existence prob
+        pred_pres_o = torch.sigmoid(pred[:,0,:])  # ensure in [0,1]
+        pred_hidx_o = torch.sigmoid(pred[:,1,:])  # existence prob
+        pred_pres_x = torch.sigmoid(pred[:,2,:])  # ensure in [0,1]
+        pred_hidx_x = torch.sigmoid(pred[:,3,:])  # existence prob
 
         # Normalize ground truth row to [0,1]
-        y_t = y_row.float() 
-        mask = y_mask.float()
+        mask_o = ground_t[:,0,:]
+        y_t_o = ground_t[:,1,:]
+        mask_x = ground_t[:,2,:]
+        y_t_x = ground_t[:,3,:]
 
         # --- Masked MSE loss (only where mask==1) ---
-        num_valid = mask.sum().clamp(min=1.0)
-        mse_loss = ((pred_row - y_t) ** 2 * mask).sum() / num_valid
+        num_valid_o = mask_o.sum().clamp(min=1.0)
+        mse_loss_o = ((pred_hidx_o - y_t_o) ** 2 * mask_o).sum() / num_valid_o
+        num_valid_x = mask_x.sum().clamp(min=1.0)
+        mse_loss_x = ((pred_hidx_x - y_t_x) ** 2 * mask_x).sum() / num_valid_x
 
         # --- BCE loss (all columns) ---
-        bce_loss = F.binary_cross_entropy(pred_exist, mask)
+        bce_loss_o = F.binary_cross_entropy(pred_pres_o, mask_o)
+        bce_loss_x = F.binary_cross_entropy(pred_pres_x, mask_x)
 
-        total_loss = mse_loss + self.beta_bce * bce_loss
+        total_loss = mse_loss_o + self.beta_bce * bce_loss_o + mse_loss_x + self.beta_bce * bce_loss_x
 
-        return total_loss, mse_loss.item(), bce_loss.item()
+        return total_loss

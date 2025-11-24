@@ -8,7 +8,7 @@ import glob
 
 from utils.evaluate import evaluate
 from utils.dice_score import dice_coeff
-from utils.loss_functions import DBCEF
+from utils.loss_functions import BCE_MSE
 
 from unet import UNet, TransformerNet
 
@@ -21,32 +21,31 @@ from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
 
-batch_size = 10
+batch_size = 5
 save_model_path = '/media/jackle/LData/MLvipir_save/save_model_latest/'
 
 
     
 @torch.no_grad()
 def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
+    test_loss = 0.0
     model.eval()
     val_loss = 0.0
 
     for data in tqdm(val_loader, total=len(val_loader), desc='Validation round', unit='batch', position=0, leave=True):
-    # for ii, data in enumerate(val_loader, 0):
-        inputs, labels = data['image'], data['mask']
+        inputs, labels = data['image'], data['gt']
         inputs, labels = inputs.to(device), labels.to(device)
-        outputs = model(inputs)                
-        loss = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:]) + dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
-        # loss = dbcefloss(outputs[:,0:2,:,:], torch.logical_or(labels[:,0,:,:],labels[:,1,:,:]).long())
+        outputs = model(inputs)    
+        loss  = bcemseloss(outputs, labels)            
         val_loss += loss.item()
         del inputs; del labels
     avg_val_loss = val_loss / len(val_loader)
     val_losses += [avg_val_loss]
-    test_loss = evaluate(model,test_loader,device)
-    test_losses += [test_loss.cpu()] # type: ignore
-    print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
+    # test_loss = evaluate(model,test_loader,device)
+    # test_losses += [test_loss.cpu()] # type: ignore
+    # print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
     # pick 5 random ionogram for testing
-    test_on_TOPHAT(model, epoch_num+1)
+    # test_on_TOPHAT(model, epoch_num+1)
     model.train()
         
     fig, axs = plt.subplots(ncols=3, nrows=1, figsize=(12, 4))
@@ -118,8 +117,8 @@ def test_on_TOPHAT(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 20
-learning_rate = 1e-5 
+epochs = 40
+learning_rate = 1e-4 
 val_percent = 0.1
 
 weight_decay = 1e-3 
@@ -158,11 +157,12 @@ else: resize = None
 model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 
 model = model.to(device=device)
-model.eval()
+model.train()
 
 optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-dbcefloss = DBCEF()
-dbcefloss = dbcefloss.to(device=device)
+# dbcefloss = DBCEF()
+# dbcefloss = dbcefloss.to(device=device)
+bcemseloss = (BCE_MSE(beta_bce=0.2)).to(device=device)
 
 epcoh_elapsed = 0
 losses = []
@@ -181,8 +181,8 @@ test_losses = []
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
-# if epcoh_elapsed ==0 :
-#     checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
+if epcoh_elapsed ==0 :
+    checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
 
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
@@ -191,25 +191,20 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
             inputs, labels = data['image'], data['gt']
             inputs, labels = inputs.to(device), labels.to(device) 
             outputs = model(inputs)
-
-            print(outputs.size(), labels.size())
-            break
-            # loss  = dbcefloss(outputs[:,0:2,:,:], labels[:,0,:,:])
-            # loss += dbcefloss(outputs[:,2:4,:,:], labels[:,1,:,:])
-            # loss.backward()
-            # optimizer.step()
-            # running_loss += loss.item()
-            # pbar.update(inputs.shape[0])
-            # pbar.set_postfix(**{'loss (batch)': loss.item()})
-            # del inputs; del labels
-            # optimizer.zero_grad()
-            # if (i+1)%checkpoint_N == 0: # validation for every checkpoint_N batch
-            #     losses += [running_loss / (i+1)]
-            #     checkpoint_eval(model, epoch, i, val_losses, test_losses, losses)
-            # break
+            loss  = bcemseloss(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+            pbar.update(inputs.shape[0])
+            pbar.set_postfix(**{'loss (batch)': loss.item()})
+            del inputs; del labels
+            optimizer.zero_grad()
+            if (i+1)%checkpoint_N == 0: # validation for every checkpoint_N batch
+                losses += [running_loss / (i+1)]
+                checkpoint_eval(model, epoch, i, val_losses, test_losses, losses)
                 
         # print('-' * 20)
-        # epcoh_elapsed += 1
+        epcoh_elapsed += 1
     
         # if epoch % 10 == 0:
         #     learning_rate = learning_rate * 0.5

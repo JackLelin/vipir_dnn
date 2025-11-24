@@ -328,8 +328,8 @@ class GenTrain():
             opres *= 0
             xpres *= 0
 
-        ovhidx = np.array([np.argmin(np.abs(vhsO[np.argmin(np.abs(fvsO - self.freqs[i]))] - self.hts)) if i !=0 else 0 for i in opres])
-        xvhidx = np.array([np.argmin(np.abs(vhsX[np.argmin(np.abs(fvsX - self.freqs[i]))] - self.hts)) if i !=0 else 0 for i in xpres])
+        ovhidx = np.array([np.argmin(np.abs(vhsO[np.argmin(np.abs(fvsO - self.freqs[i]))] - self.hts)) if opres[i] !=0 else 0 for i in np.arange(opres.shape[0])])
+        xvhidx = np.array([np.argmin(np.abs(vhsX[np.argmin(np.abs(fvsX - self.freqs[i]))] - self.hts)) if xpres[i] !=0 else 0 for i in np.arange(xpres.shape[0])])
 
         fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
         ax1 = axes[0]

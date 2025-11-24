@@ -23,7 +23,7 @@ class UNet(nn.Module):
         self.up4 = (Up(128, 64, up_kernel_size))
         self.outc = (OutConv(64, n_classes))
 
-        self.cfc = ColumnFC(input_size, n_classes, 2)
+        self.cfc = ColumnFC(input_size, n_classes, 4)
         # self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
 

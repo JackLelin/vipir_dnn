@@ -241,6 +241,6 @@ class ColumnFC(nn.Module):
         out = self.fc(x)
         # shape: [B, 408, 2]
                 
-        x = x.permute(0, 2, 1).contiguous().view(B, -1, self.input_size[1])
+        out = out.permute(0, 2, 1).contiguous().view(B, -1, self.input_size[1])
         # Output: [B, 2, 408]
         return out
