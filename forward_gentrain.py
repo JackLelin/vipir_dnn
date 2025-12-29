@@ -412,7 +412,7 @@ if __name__ == "__main__":
     # print(noise_files)
     ipp = 5.6e3*0.15
     print(ipp)
-    ipp - hts[-1]*1
+    # ipp - hts[-1]*1
     gt = GenTrain(freqs,hts,ipp,training_dir,noise_dir)
     dt0 = datetime.datetime(2015,4,15)
     igrf_year = dt0.year + (dt0-datetime.datetime(dt0.year,1,1)).total_seconds() / (

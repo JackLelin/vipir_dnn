@@ -68,10 +68,10 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/TOPHAT_checkpoint_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/20ktrain_set_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
-def test_on_TOPHAT(model, epoch_num):    
+def test_on_binary_ionograms(model, epoch_num):    
     with torch.inference_mode():
         img = []
         filename = []
@@ -206,7 +206,7 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
         # print('-' * 20)
         epcoh_elapsed += 1
     
-        # if epoch % 10 == 0:
-        #     learning_rate = learning_rate * 0.5
-        #     weight_decay = weight_decay * 0.5
-        #     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        if epoch % 10 == 0:
+            learning_rate = learning_rate * 0.5
+            weight_decay = weight_decay * 0.5
+            optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
