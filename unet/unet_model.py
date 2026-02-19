@@ -4,13 +4,19 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
+    '''
+    Docstring for UNet
+    To minimize the amount of memory operation, the UNet is taking transposed image as input, 
+    i.e., [B, C, W, H] where W is the freqs axis (number of columns), H is the height axis (number of rows),
+    in other words, column major format.
+    '''
     def __init__(self, n_channels, n_classes, input_size, in_dropout_p=0.3, dropout_p=0.1, up_kernel_size=2):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
 
         n_att_channel = 2
-        self.att = Transformer(n_heads=1, n_embd=1024, n_blocks=8, p_drop=dropout_p, n_token=input_size[1], n_embd_in=input_size[0], n_channel_out=n_att_channel)
+        self.att = Transformer(n_heads=1, dim_embd=1024, n_blocks=8, p_drop=dropout_p, n_token=input_size[0], dim_embd_in=input_size[1], n_channel_out=n_att_channel)
         
         self.inc = (DoubleConv(n_att_channel, 64))
         self.down1 = (Down(64, 128))
@@ -23,7 +29,7 @@ class UNet(nn.Module):
         self.up4 = (Up(128, 64, up_kernel_size))
         self.outc = (OutConv(64, n_classes))
 
-        self.cfc = ColumnFC(input_size, n_classes, 4)
+        self.cfc = ColumnFC(input_size[1], input_size[1], n_classes)
         # self.drop_layer = nn.Dropout(p=dropout_p)
         self.dropout_p = in_dropout_p
 

@@ -89,66 +89,73 @@ def pos_enc(idx : torch.Tensor , n_embd):
 #         return x
 
 class Transformer(nn.Module):
+    '''
+    Docstring for Transformer
+    Use each height vector as input token, and do attention along the height axis. The output is still in the same shape as input, but with n_channel_out channels.
+    Height axis the last demension of the input, so the Transformer is taking transposed image as input (column major format) to minimize the amount of memory operation.
+    '''
     """adding positional encoding and multiple Transformer blocks"""
 
-    def __init__(self, n_heads=1, n_embd = 1024, n_blocks=5, p_drop = 0.2, n_token=408, n_embd_in=512, n_channel_out =4):
+    def __init__(self, n_heads=1, dim_embd = 1024, n_blocks=5, p_drop = 0.2, n_token=408, dim_embd_in=512, n_channel_out =4):
         super().__init__()
 
         # calculate all dimensions
         self.n_token = n_token # number of tokens: number of row or number of col
-        self.n_embd = n_embd # attention embedding dimension
-        self.n_embd_in = n_embd_in
+        self.dim_embd = dim_embd # attention embedding dimension
+        self.dim_embd_in = dim_embd_in
         self.n_channel_out = n_channel_out
 
         #Linear projection
-        self.in_linear = nn.Linear(self.n_embd_in, self.n_embd)
-        self.out_linear = nn.Linear(self.n_embd, self.n_embd_in * n_channel_out)
+        self.in_linear = nn.Linear(self.dim_embd_in, self.dim_embd)
+        self.out_linear = nn.Linear(self.dim_embd, self.dim_embd_in * n_channel_out)
 
         #Transformer train
-        blocks = [Transformer_element(n_heads=n_heads, n_embd=n_embd, n_token=n_token, p_drop=p_drop) for _ in range(n_blocks)]
+        blocks = [Transformer_element(n_heads=n_heads, dim_embd=dim_embd, n_token=n_token, p_drop=p_drop) for _ in range(n_blocks)]
         self.blocks = nn.Sequential(*blocks)
 
         # positional encoding
-        p_e =pos_enc(torch.arange(self.n_token), self.n_embd) 
+        p_e =pos_enc(torch.arange(self.n_token), self.dim_embd) 
         self.register_buffer('pe',p_e[None,:,:], persistent=False)  #2D position encoding, first half is for x-pos, second half is for y-pos
 
     def forward(self, x: torch.Tensor):
         # assetion of the input size
-        B, C, E, T = x.size()
-        assert C == 1
+        B, C, T, E = x.size()
+        assert C == 1 and T == self.n_token and E == self.dim_embd_in, \
+            f"Expected [B,1,{self.n_token},{self.dim_embd_in}], got {x.shape}"
         assert T == self.n_token
-        assert E == self.n_embd_in
+        assert E == self.dim_embd_in
 
-        # Transpose the array, each col is a token. n_col is n_token
-        xp = x.reshape(B,E,T).permute(0,2,1)
+        # Transpose the array, each row is a token. n_row is n_token
+        x_t = x.reshape(B,T,E) # no permuation is needed .permute(0,2,1) the input is already in column major format
 
         # Linear projection, change the embedding dimension
-        xp = self.in_linear(xp)
+        xp = self.in_linear(x_t)
         xp = xp + self.pe #adding position encoding
         # transformer blocks
         xp = self.blocks(xp)
-        # Linear projection, outputs n_channel_out channels, so n_channel_out * n_embd_in
+        # Linear projection, outputs n_channel_out channels, so n_channel_out * dim_embd_in
         xp = self.out_linear(xp)
         # First reshape to channel last, then permute the axes.
-        xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,2,1)
+        # xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,2,1)
+        xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,1,2) # channel first, the image is still transposed 
         xout = xout + torch.cat([x]*self.n_channel_out, dim=1) #resdual connection
         return xout
     
 class Transformer_element(nn.Module):
     """attention + mlp"""
 
-    def __init__(self, n_heads=1, n_embd = 1024, n_token=512, p_drop = 0.2):
+    def __init__(self, n_heads=1, dim_embd = 1024, n_token=512, p_drop = 0.2):
         super().__init__()
 
         # calculate all dimensions
         self.n_token = n_token # number of tokens number of row or number of col
-        self.n_embd = n_embd # attention embedding dimension
+        self.dim_embd = dim_embd # attention embedding dimension
 
         # intitiate the attention modules
-        self.c_attn = nn.Linear(self.n_embd, 3 * self.n_embd, bias=False) # linear block for finding QKV vectors
-        self.mlp = nn.Sequential(nn.Linear(self.n_embd, self.n_embd, bias=False),
-                                nn.ReLU(inplace=True)) 
-        self.mhatt = nn.MultiheadAttention(embed_dim = self.n_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
+        self.c_attn = nn.Linear(self.dim_embd, 3 * self.dim_embd, bias=False) # linear block for finding QKV vectors
+        self.mlp = nn.Sequential(nn.Linear(self.dim_embd, self.dim_embd, bias=False),
+                                nn.GELU()) 
+        self.mhatt = nn.MultiheadAttention(embed_dim = self.dim_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
         # self.relu = nn.ReLU(inplace=True)
         self.relu = nn.GELU()
         self.ln = nn.GroupNorm(1,n_token) #layernorm for attention block, M*M is the sequence length
@@ -156,7 +163,7 @@ class Transformer_element(nn.Module):
     def forward(self, x):
         xp = self.ln(x) #layernorm
         # attention block
-        q, k, v  = self.c_attn(xp).split(self.n_embd, dim=2)
+        q, k, v  = self.c_attn(xp).split(self.dim_embd, dim=2)
         y, _ = self.mhatt(q, k, v)
         y = self.relu(y)
         y = self.mlp(y)
@@ -223,24 +230,65 @@ class OutConv(nn.Module):
         return y
     
 
-class ColumnFC(nn.Module):
-    def __init__(self, input_size, in_channels, out_channels):
-        super(ColumnFC, self).__init__()
-        self.fc = nn.Linear(input_size[0] * in_channels, out_channels)   # 2048 -> 4
-        self.relu = nn.ReLU(inplace=True)
-        self.input_size = input_size
-    def forward(self, x):
-        # x: [B, 4, 512, 408]
-        B = x.size(0)
+# class ColumnFC(nn.Module):
+#     def __init__(self, input_size, in_channels, out_channels):
+#         super(ColumnFC, self).__init__()
+#         self.fc = nn.Linear(input_size[0] * in_channels, out_channels)   # 2048 -> 4
+#         self.relu = nn.ReLU(inplace=True)
+#         self.input_size = input_size
+#     def forward(self, x):
+#         # x: [B, 4, 512, 408]
+#         B = x.size(0)
         
-        x = self.relu(x)
-        # shape: [B, 408, 4*512]
-        x = x.permute(0, 3, 1, 2).contiguous().view(B, self.input_size[1], -1)
+#         x = self.relu(x)
+#         # shape: [B, 408, 4*512]
+#         x = x.permute(0, 3, 1, 2).contiguous().view(B, self.input_size[1], -1)
 
-        # Apply FC to each column
-        out = self.fc(x)
-        # shape: [B, 408, 2]
+#         # Apply FC to each column
+#         out = self.fc(x)
+#         # shape: [B, 408, 2]
                 
-        out = out.permute(0, 2, 1).contiguous().view(B, -1, self.input_size[1])
-        # Output: [B, 2, 408]
-        return out
+#         out = out.permute(0, 2, 1).contiguous().view(B, -1, self.input_size[1])
+#         # Output: [B, 2, 408]
+#         return out
+    
+class ColumnFC(nn.Module):
+    '''
+    Docstring for ColumnFC
+    
+    # Applies an FC along the 512 dimension for each row independently.
+    # Input:  [B, 2, 408, 512]
+    # Output: [B, 2, 408, 512]  (if dimension of row n_row_out=512) 
+    '''
+    
+    def __init__(self, n_row_in, n_row_out, channels, bias=True):
+        super().__init__()
+        self.n_row_in = n_row_in
+        self.n_row_out = n_row_out
+        self.channels = channels
+
+        # Same FC used for every channel (no cross-channel mixing)
+        self.fc = nn.Linear(self.n_row_in, self.n_row_out, bias=bias)
+
+    def forward(self, x):
+        # x: [B, 2, 408, 512]
+        B, C, M, N = x.shape
+        assert N == self.n_row_in and C == self.channels, \
+            f"Expected [B,{self.channels},M,{self.n_row_in}], got {x.shape}"
+
+        # treat each (B, ch, row) as a separate sample with length-512 vector
+        # # permute [B, 2, 512, 408] -> [B, 2, 408, 512]
+        # x = x.permute(0, 1, 3, 2).contiguous()
+        # No need for permute, the input is already in transposed
+
+
+        # FC along the 512 dimension
+        x = self.fc(x)
+
+        # permute [B, 2, 512, 408] -> [B, 2, 408, 512]
+        # x = x.permute(0, 1, 3, 2).contiguous()
+        # skip the permute 
+
+        return x
+
+

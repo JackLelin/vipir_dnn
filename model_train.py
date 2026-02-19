@@ -6,11 +6,12 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 import glob
 
-from utils.evaluate import evaluate
-from utils.dice_score import dice_coeff
-from utils.loss_functions import BCE_MSE
+# from utils.evaluate import evaluate
+# from utils.dice_score import dice_coeff
+# from utils.loss_functions import BCE_MSE
+# from utils.loss_functions import CE_by_col
 
-from unet import UNet, TransformerNet
+from unet import UNet
 
 
 import numpy as np
@@ -36,7 +37,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
         inputs, labels = data['image'], data['gt']
         inputs, labels = inputs.to(device), labels.to(device)
         outputs = model(inputs)    
-        loss  = bcemseloss(outputs, labels)            
+        loss  = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1))            
         val_loss += loss.item()
         del inputs; del labels
     avg_val_loss = val_loss / len(val_loader)
@@ -45,7 +46,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     # test_losses += [test_loss.cpu()] # type: ignore
     # print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
     # pick 5 random ionogram for testing
-    # test_on_TOPHAT(model, epoch_num+1)
+    test_on_binary_ionograms(model, epoch_num+1)
     model.train()
         
     fig, axs = plt.subplots(ncols=3, nrows=1, figsize=(12, 4))
@@ -68,10 +69,11 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/20ktrain_set_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/CEbycol_20ktrain_set_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
+    softmax = nn.Softmax(dim=-1)
     with torch.inference_mode():
         img = []
         filename = []
@@ -79,7 +81,7 @@ def test_on_binary_ionograms(model, epoch_num):
             file = testfiles[np.random.randint(0,len(testfiles)-1)]
             filename += [file]
             testdata = np.load('VIPIR_PROC/proc/' + file, allow_pickle=True, fix_imports=True)[()]
-            testimage = torch.from_numpy(testdata['mask_full']).float()
+            testimage = torch.from_numpy(testdata['mask_full'].T).float()
             testimage = testimage[None,None,:,:] if resize_tr == None else resize_tr(testimage[None,None,:,:])
             # testimage = torch.cat([testimage,XX[None,None,:,:],YY[None,None,:,:]],dim=-3)
             img += [testimage]
@@ -90,23 +92,25 @@ def test_on_binary_ionograms(model, epoch_num):
         for i in range(batch_size):
             img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
-            imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
-            # imgX = imgO
-            imgX = torch.argmax(label1[2:4,:,:],dim=0).detach().numpy()
+            # imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
+            # imgX = torch.argmax(label1[2:4,:,:],dim=0).detach().numpy()
+            imgO = softmax(label1[0,:,:]).detach().numpy()
+            imgX = softmax(label1[1,:,:]).detach().numpy()
+
             fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
             plt.title(f'epoch{epoch_num}_{filename[i]}')
             ax = axs[0]
-            ax.imshow(img1.detach().cpu().numpy()[0], origin='lower', aspect = 'auto')
+            ax.imshow(img1.detach().cpu().numpy()[0].T, origin='lower', aspect = 'auto')
             ax.axis('off')
             ax = axs[1]
-            ax.imshow(imgO, origin='lower', aspect = 'auto')
+            ax.imshow(imgO.T, origin='lower', aspect = 'auto')
             ax.axis('off')
             ax = axs[2]
-            ax.imshow(imgX, origin='lower', aspect = 'auto')
+            ax.imshow(imgX.T, origin='lower', aspect = 'auto')
             ax.axis('off')
             ax = axs[3]
-            imgX[imgO==1]=2
-            ax.imshow(imgX, origin='lower', aspect = 'auto')
+            # imgX[imgO==1]=2
+            ax.imshow(imgO.T + imgX.T, origin='lower', aspect = 'auto')
             ax.axis('off')
 
             plt.savefig(f'testing_result/epoch{epoch_num}_{filename[i][:-4]}.png', bbox_inches='tight')
@@ -117,16 +121,10 @@ def test_on_binary_ionograms(model, epoch_num):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-epochs = 40
-learning_rate = 1e-4 
 val_percent = 0.1
 
-weight_decay = 1e-3 
-momentum = 0.2
-gradient_clipping = 1.0
-
-target_size = [512,408] #[572,572] #[524,412]
-original_size = [512,408]
+target_size = [408,512]# [512,408] #[572,572] #[524,412]
+original_size = [408,512]
 resize = 'pad'
 
 train_dataset = ParabolaIonoDatasetOX('training_data', target_size= target_size, resize=resize)
@@ -154,16 +152,24 @@ else: resize = None
 
 
 
-model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
+model = UNet(n_channels=1, n_classes=2, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 
 model = model.to(device=device)
 model.train()
 
+learning_rate = 1e-5
+weight_decay = 0 #1e-3 
+momentum = 0.2
+gradient_clipping = 1.0
+
 optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 # dbcefloss = DBCEF()
 # dbcefloss = dbcefloss.to(device=device)
-bcemseloss = (BCE_MSE(beta_bce=0.2)).to(device=device)
+# bcemseloss = (BCE_MSE(beta_bce=0.2)).to(device=device)
+# ce_by_col = CE_by_col().to(device=device)
+ce_criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
 
+epochs = 40
 epcoh_elapsed = 0
 losses = []
 val_losses = []
@@ -181,17 +187,20 @@ test_losses = []
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
-if epcoh_elapsed ==0 :
-    checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
+# if epcoh_elapsed ==0 :
+#     checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
 
 for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data['image'], data['gt']
+            # print('input shape, label shape',inputs.shape, labels.shape)
             inputs, labels = inputs.to(device), labels.to(device) 
             outputs = model(inputs)
-            loss  = bcemseloss(outputs, labels)
+            # print('outputs shape',outputs.shape)
+            # break
+            loss = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1))
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -203,10 +212,11 @@ for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
                 losses += [running_loss / (i+1)]
                 checkpoint_eval(model, epoch, i, val_losses, test_losses, losses)
                 
-        # print('-' * 20)
+        print('-' * 20)
+        # break
         epcoh_elapsed += 1
     
-        if epoch % 10 == 0:
-            learning_rate = learning_rate * 0.5
-            weight_decay = weight_decay * 0.5
-            optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        # if epoch % 10 == 0:
+        #     learning_rate = learning_rate * 0.5
+        #     weight_decay = weight_decay * 0.5
+        #     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)

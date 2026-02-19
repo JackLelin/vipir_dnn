@@ -8,6 +8,7 @@ from torchvision import transforms
 from torchvision.transforms.v2 import Pad
 
 from PIL import Image
+import torch.nn.functional as F
 # from torchvision.transforms import ToTensor
 
 class ParabolaIonoDatasetOX(Dataset):
@@ -22,7 +23,7 @@ class ParabolaIonoDatasetOX(Dataset):
         self.img_names.sort()
         self.img_names.tolist()
 
-        original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).shape
+        original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).T.shape
         self.target_size = target_size if target_size != None else original_size
         # self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
         if target_size == None:
@@ -40,10 +41,15 @@ class ParabolaIonoDatasetOX(Dataset):
         #crop_region:[120:-10,30:390]
         img_path = os.path.join(self.img_dir, self.img_names[idx]) # type: ignore
         img = np.array(Image.open(img_path))
+        # print('numpy shape',img.shape)
         image = torch.from_numpy((img>128).astype(np.float32)).float()[None,:,:]
+        image = torch.permute(image, (0,2,1))
+        image = torch.flip(image,dims=[-1]).contiguous()
+        # print('shape after flip',image.shape)
         if self.transform != None: image = self.transform(image)
-        image = torch.flip(image,dims=[1])
-        
+        # print('shape after transform',image.shape)
+        # image = torch.permute(image, (0,2,1)).contiguous() # [C,H,W] -> [C,W,H]
+        # print('shape after permute',image.shape)
         # Getting the groud truth label
         # imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]))
         # imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]))
@@ -66,17 +72,22 @@ class ParabolaIonoDatasetOX(Dataset):
         # target["filename"] = idx
 
         data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
-        opres = torch.from_numpy(data['opres'])[None,:].float() 
-        xpres = torch.from_numpy(data['xpres'])[None,:].float() 
-        ovhidx = torch.from_numpy(data['ovhidx'])[None,:].float() 
-        xvhidx = torch.from_numpy(data['xvhidx'])[None,:].float() 
+        # opres = torch.from_numpy(data['opres'])[None,:].float() 
+        # xpres = torch.from_numpy(data['xpres'])[None,:].float() 
+        ovhidx = torch.from_numpy(data['ovhidx']).long()
+        xvhidx = torch.from_numpy(data['xvhidx']).long()
 
-        ovhidx /= self.target_size[0]
-        xvhidx /= self.target_size[0]
-        target["gt"] = torch.cat([opres,ovhidx,xpres,xvhidx],dim=0)
+        # ovhidx /= self.target_size[0]
+        # xvhidx /= self.target_size[0]
+        # target["gt"] = torch.cat([opres,ovhidx,xpres,xvhidx],dim=0)
+
+        # one_hot_o = F.one_hot(ovhidx, num_classes=self.target_size[1]).contiguous()[None,:]
+        # one_hot_x = F.one_hot(xvhidx, num_classes=self.target_size[1]).contiguous()[None,:]
+        # target["gt"] = torch.cat([one_hot_o, one_hot_x], dim=0)
+
+        target["gt"] = torch.cat([ovhidx[None,:], xvhidx[None,:]], dim=0)
 
         return target
-    
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader

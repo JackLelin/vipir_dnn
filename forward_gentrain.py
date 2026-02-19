@@ -414,7 +414,7 @@ if __name__ == "__main__":
     print(ipp)
     # ipp - hts[-1]*1
     gt = GenTrain(freqs,hts,ipp,training_dir,noise_dir)
-    dt0 = datetime.datetime(2015,4,15)
+    dt0 = datetime.datetime(2016,4,15)
     igrf_year = dt0.year + (dt0-datetime.datetime(dt0.year,1,1)).total_seconds() / (
             datetime.datetime(dt0.year+1,1,1)-datetime.datetime(dt0.year,1,1)).total_seconds()
 
@@ -430,7 +430,7 @@ if __name__ == "__main__":
 
     gt.graph_generate(fes, Z, dz, savedata = False)
 
-    if True:
+    if False:
         from joblib import Parallel, delayed
         import multiprocessing as mp
 

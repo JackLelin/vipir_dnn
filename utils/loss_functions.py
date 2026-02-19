@@ -69,3 +69,21 @@ class BCE_MSE(nn.Module):
         total_loss = mse_loss_o + self.beta_bce * bce_loss_o + mse_loss_x + self.beta_bce * bce_loss_x
 
         return total_loss
+    
+
+class CE_by_col(nn.Module):
+    def __init__(self, epsilon: float = 1e-9):
+        super().__init__()
+        self.softmax = nn.Softmax(dim=-1)
+        self.epsilon = epsilon
+
+    def forward(self, pred, ground_t):
+        assert pred.size() == ground_t.size()
+        
+        y = torch.clamp(self.softmax(pred), min = self.epsilon, max = 1-self.epsilon)
+        N = ground_t.size()[-1]*ground_t.size()[-2]
+
+        CE = -1*512* ground_t*torch.clamp(torch.log(y), min = -100)
+
+        total_loss = torch.sum(CE)/N/y.size()[0]
+        return total_loss
