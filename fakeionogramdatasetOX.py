@@ -33,7 +33,8 @@ class ParabolaIonoDatasetOX(Dataset):
         elif resize == 'pad':
             self.transform = Pad([(self.target_size[1] - original_size[1])//2, (self.target_size[0] - original_size[0])//2])
         
-        # self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
+        self.cropresize = transforms.RandomResizedCrop(self.target_size, scale=(0.9, 1.1), ratio=(0.8, 1.2), interpolation=transforms.InterpolationMode.NEAREST)
+    
     def __len__(self):
         return len(self.img_names)
 
@@ -48,44 +49,28 @@ class ParabolaIonoDatasetOX(Dataset):
         # print('shape after flip',image.shape)
         if self.transform != None: image = self.transform(image)
         # print('shape after transform',image.shape)
-        # image = torch.permute(image, (0,2,1)).contiguous() # [C,H,W] -> [C,W,H]
-        # print('shape after permute',image.shape)
-        # Getting the groud truth label
-        # imgO = np.array(Image.open(self.gt_dirO + self.img_names[idx]))
-        # imgX = np.array(Image.open(self.gt_dirX + self.img_names[idx]))
-        # label = np.zeros((2,imgO.shape[0],imgO.shape[1]),dtype=np.int_)
-        
-        # label[0,:,:][imgO[:,:,0] > 128] = 1 # R channel, O mode
-        # label[1,:,:][imgX[:,:,1] > 128] = 1 # G channel, X mode
 
-        # label = torch.from_numpy(label)
-        # if self.transform != None: label = self.transform(label)
-        # label = torch.flip(label,dims=[-2])
-
-        # # random crop and resize on both image and labels
-        # cropped = self.cropresize(torch.cat([image,label],dim=0))
-        # image = cropped[:1,:,:]
-        # label = cropped[1:,:,:].long()
-        target = {}
-        target["image"] = image
-        # target["mask"] = label.squeeze()
         # target["filename"] = idx
 
         data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
-        # opres = torch.from_numpy(data['opres'])[None,:].float() 
-        # xpres = torch.from_numpy(data['xpres'])[None,:].float() 
+
         ovhidx = torch.from_numpy(data['ovhidx']).long()
         xvhidx = torch.from_numpy(data['xvhidx']).long()
 
-        # ovhidx /= self.target_size[0]
-        # xvhidx /= self.target_size[0]
-        # target["gt"] = torch.cat([opres,ovhidx,xpres,xvhidx],dim=0)
+        one_hot_o = F.one_hot(ovhidx, num_classes=self.target_size[1]).contiguous()[None,:,:]
+        one_hot_x = F.one_hot(xvhidx, num_classes=self.target_size[1]).contiguous()[None,:,:]
 
-        # one_hot_o = F.one_hot(ovhidx, num_classes=self.target_size[1]).contiguous()[None,:]
-        # one_hot_x = F.one_hot(xvhidx, num_classes=self.target_size[1]).contiguous()[None,:]
+        # random crop and resize on both image and labels
+        cropped = self.cropresize(torch.cat([image,one_hot_o,one_hot_x],dim=0))
+        image = cropped[0:1,:,:]
+        label_o = torch.argmax(cropped[1,:,:].long(), dim=-1).long()
+        label_x = torch.argmax(cropped[2,:,:].long(), dim=-1).long()
+
+        target = {}
+        target["image"] = image
+        target["gt"] = torch.cat([label_o[None,:], label_x[None,:]], dim=0)
+
         # target["gt"] = torch.cat([one_hot_o, one_hot_x], dim=0)
-
-        target["gt"] = torch.cat([ovhidx[None,:], xvhidx[None,:]], dim=0)
 
         return target
 

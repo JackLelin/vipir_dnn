@@ -170,7 +170,7 @@ optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_deca
 ce_criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
 
 epochs = 40
-epcoh_elapsed = 0
+epoch_elapsed = 0
 losses = []
 val_losses = []
 test_losses = []
@@ -178,19 +178,19 @@ test_losses = []
 # load_checkpoint = torch.load(save_model_path+'TOPHAT_checkpoint_epoch_37_18000_loss1.3966.pth')
 # model.load_state_dict(load_checkpoint['model_state_dict'])
 # optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
-# epcoh_elapsed = load_checkpoint['epoch']+1
+# epoch_elapsed = load_checkpoint['epoch']+1
 # test_losses   = load_checkpoint['test_loss']
 # val_losses    = load_checkpoint['val_loss']
 # losses   = load_checkpoint['train_loss']
 # epochs = 8
-# print('epcoh_elapsed: ', epcoh_elapsed)
+# print('epoch_elapsed: ', epoch_elapsed)
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
-# if epcoh_elapsed ==0 :
+# if epoch_elapsed == 0 :
 #     checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
 
-for epoch in range(epcoh_elapsed,epcoh_elapsed+epochs):
+for epoch in range(epoch_elapsed,epoch_elapsed+epochs):
     with tqdm(total=n_train, desc=f'Epoch {epoch+1}/{epochs}', unit='img') as pbar:
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
