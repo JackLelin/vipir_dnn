@@ -23,7 +23,7 @@ from testionogramdataset import HandPickTraceDataset
 from torch.optim import AdamW
 
 batch_size = 5
-save_model_path = '/media/jackle/LData/MLvipir_save/save_model_latest/'
+save_model_path = '/mnt/LData/MLvipir_save/save_model_latest/'
 
 
     
@@ -51,25 +51,25 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
         
     fig, axs = plt.subplots(ncols=3, nrows=1, figsize=(12, 4))
     ax = axs[0]
-    ax.plot(np.arange(len(losses))*checkpoint_N,losses)
-    ax.set_xlabel('Steps');ax.set_ylabel('Training loss')
+    ax.plot(np.arange(len(losses))*checkpoint_N/len(train_loader),losses)
+    ax.set_xlabel('Epochs');ax.set_ylabel('Training loss')
     ax = axs[1]
-    ax.plot(np.arange(len(val_losses))*checkpoint_N,val_losses)
-    ax.set_xlabel('Steps');ax.set_ylabel('Val loss')
+    ax.plot(np.arange(len(val_losses))*checkpoint_N/len(train_loader),val_losses)
+    ax.set_xlabel('Epochs');ax.set_ylabel('Val loss')
     ax = axs[2]
-    ax.plot(np.arange(len(test_losses))*checkpoint_N,test_losses)
-    ax.set_xlabel('Steps');ax.set_ylabel('Test Dice score')
+    ax.plot(np.arange(len(test_losses))*checkpoint_N/len(train_loader),test_losses)
+    ax.set_xlabel('Epochs');ax.set_ylabel('Test Dice score')
     fig.savefig(f'losses.png', bbox_inches='tight')
     plt.close()
     
-    torch.save({
-    'epoch': epoch_num,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'test_loss': test_losses,
-    'val_loss': val_losses,
-    'train_loss': losses,
-    }, f'{save_model_path}/CEbycol_20ktrain_set_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+    # torch.save({
+    # 'epoch': epoch_num,
+    # 'model_state_dict': model.state_dict(),
+    # 'optimizer_state_dict': optimizer.state_dict(),
+    # 'test_loss': test_losses,
+    # 'val_loss': val_losses,
+    # 'train_loss': losses,
+    # }, f'{save_model_path}/CEbycol_VTonly_20ktrain_set_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
@@ -175,15 +175,14 @@ losses = []
 val_losses = []
 test_losses = []
 
-# load_checkpoint = torch.load(save_model_path+'TOPHAT_checkpoint_epoch_37_18000_loss1.3966.pth')
-# model.load_state_dict(load_checkpoint['model_state_dict'])
-# optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
-# epoch_elapsed = load_checkpoint['epoch']+1
-# test_losses   = load_checkpoint['test_loss']
-# val_losses    = load_checkpoint['val_loss']
-# losses   = load_checkpoint['train_loss']
-# epochs = 8
-# print('epoch_elapsed: ', epoch_elapsed)
+load_checkpoint = torch.load(save_model_path+'CEbycol_VTonly_20ktrain_set_epoch_160_18000_loss0.0000.pth')
+model.load_state_dict(load_checkpoint['model_state_dict'])
+optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
+epoch_elapsed = load_checkpoint['epoch']+1
+test_losses   = load_checkpoint['test_loss']
+val_losses    = load_checkpoint['val_loss']
+losses   = load_checkpoint['train_loss']
+print('epoch_elapsed: ', epoch_elapsed)
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
@@ -214,7 +213,7 @@ for epoch in range(epoch_elapsed,epoch_elapsed+epochs):
                 
         print('-' * 20)
         # break
-        epcoh_elapsed += 1
+        epoch_elapsed += 1
     
         # if epoch % 10 == 0:
         #     learning_rate = learning_rate * 0.5
