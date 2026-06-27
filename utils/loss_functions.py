@@ -72,6 +72,16 @@ class BCE_MSE(nn.Module):
     
 
 class CE_by_col(nn.Module):
+    """
+    Computes a custom Cross-Entropy loss column-by-column.
+
+    Not used, the torch library version was used.
+    
+    This loss function applies a softmax along the last dimension to get a probability 
+    distribution (e.g., probability of a signal over height bins for each column). It then 
+    computes the cross-entropy against the ground truth, scaled by a factor (512), 
+    and averages the total loss over the batch and spatial dimensions.
+    """
     def __init__(self, epsilon: float = 1e-9):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
