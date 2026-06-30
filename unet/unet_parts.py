@@ -144,7 +144,7 @@ class Transformer(nn.Module):
 class Transformer_element(nn.Module):
     """attention + mlp"""
 
-    def __init__(self, n_heads=1, dim_embd = 1024, n_token=512, p_drop = 0.2):
+    def __init__(self, n_heads=4, dim_embd = 1024, n_token=512, p_drop = 0.2):
         super().__init__()
 
         # calculate all dimensions
@@ -152,24 +152,32 @@ class Transformer_element(nn.Module):
         self.dim_embd = dim_embd # attention embedding dimension
 
         # intitiate the attention modules
-        self.c_attn = nn.Linear(self.dim_embd, 3 * self.dim_embd, bias=False) # linear block for finding QKV vectors
-        self.mlp = nn.Sequential(nn.Linear(self.dim_embd, self.dim_embd, bias=False),
-                                nn.GELU()) 
+        self.mlp = nn.Sequential(
+            nn.Linear(self.dim_embd, self.dim_embd),
+            nn.GELU(),
+            nn.Dropout(p_drop),
+            nn.Linear(self.dim_embd, self.dim_embd),
+            nn.Dropout(p_drop)
+        )
         self.mhatt = nn.MultiheadAttention(embed_dim = self.dim_embd, num_heads = n_heads, dropout= p_drop, batch_first=True)
         # self.relu = nn.ReLU(inplace=True)
         self.relu = nn.GELU()
-        self.ln = nn.GroupNorm(1,n_token) #layernorm for attention block, M*M is the sequence length
+        
+        self.ln1 = nn.LayerNorm(self.dim_embd) # LayerNorm before attention
+        self.ln2 = nn.LayerNorm(self.dim_embd) # LayerNorm before MLP
 
     def forward(self, x):
-        xp = self.ln(x) #layernorm
-        # attention block
-        q, k, v  = self.c_attn(xp).split(self.dim_embd, dim=2)
-        y, _ = self.mhatt(q, k, v)
-        y = self.relu(y)
-        y = self.mlp(y)
+        # 1. Attention Stage with residual
+        xp = self.ln1(x) 
+        attn_out, _ = self.mhatt(xp, xp, xp)
+        x = x + self.relu(attn_out) # residual connection 1
         
-        y = x + y# residual connection
-        return y
+        # 2. MLP Stage with residual
+        xp = self.ln2(x) 
+        mlp_out = self.mlp(xp)
+        x = x + mlp_out # residual connection 2
+        
+        return x
     
 class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
