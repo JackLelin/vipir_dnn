@@ -22,7 +22,7 @@ from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
 
-batch_size = 5
+batch_size = 16
 save_model_path = '/mnt/LData/MLvipir_save/save_model_latest/'
 
 
@@ -37,7 +37,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
         inputs, labels = data['image'], data['gt']
         inputs, labels = inputs.to(device), labels.to(device)
         outputs = model(inputs)    
-        loss  = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1))            
+        loss  = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1, labels.shape[-1]))            
         val_loss += loss.item()
         del inputs; del labels
     avg_val_loss = val_loss / len(val_loader)
@@ -62,14 +62,14 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     fig.savefig(f'losses.png', bbox_inches='tight')
     plt.close()
     
-    # torch.save({
-    # 'epoch': epoch_num,
-    # 'model_state_dict': model.state_dict(),
-    # 'optimizer_state_dict': optimizer.state_dict(),
-    # 'test_loss': test_losses,
-    # 'val_loss': val_losses,
-    # 'train_loss': losses,
-    # }, f'{save_model_path}/CEbycol_VTonly_20ktrain_set_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+    torch.save({
+    'epoch': epoch_num,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'test_loss': test_losses,
+    'val_loss': val_losses,
+    'train_loss': losses,
+    }, f'{save_model_path}/CEbycol_VTonly_40ktrain_GuassLabel_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
@@ -167,7 +167,7 @@ optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_deca
 # dbcefloss = dbcefloss.to(device=device)
 # bcemseloss = (BCE_MSE(beta_bce=0.2)).to(device=device)
 # ce_by_col = CE_by_col().to(device=device)
-ce_criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+ce_criterion = nn.CrossEntropyLoss()
 
 epochs = 40
 epoch_elapsed = 0
@@ -175,14 +175,14 @@ losses = []
 val_losses = []
 test_losses = []
 
-load_checkpoint = torch.load(save_model_path+'CEbycol_VTonly_20ktrain_set_epoch_160_18000_loss0.0000.pth')
-model.load_state_dict(load_checkpoint['model_state_dict'])
-optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
-epoch_elapsed = load_checkpoint['epoch']+1
-test_losses   = load_checkpoint['test_loss']
-val_losses    = load_checkpoint['val_loss']
-losses   = load_checkpoint['train_loss']
-print('epoch_elapsed: ', epoch_elapsed)
+# load_checkpoint = torch.load(save_model_path+'CEbycol_VTonly_40ktrain_set_epoch_160_18000_loss0.0000.pth')
+# model.load_state_dict(load_checkpoint['model_state_dict'])
+# optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
+# epoch_elapsed = load_checkpoint['epoch']+1
+# test_losses   = load_checkpoint['test_loss']
+# val_losses    = load_checkpoint['val_loss']
+# losses   = load_checkpoint['train_loss']
+# print('epoch_elapsed: ', epoch_elapsed)
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
@@ -199,7 +199,7 @@ for epoch in range(epoch_elapsed,epoch_elapsed+epochs):
             outputs = model(inputs)
             # print('outputs shape',outputs.shape)
             # break
-            loss = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1))
+            loss = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1, labels.shape[-1]))
             loss.backward()
             optimizer.step()
             running_loss += loss.item()

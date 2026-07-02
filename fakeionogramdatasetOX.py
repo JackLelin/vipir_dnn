@@ -54,23 +54,40 @@ class ParabolaIonoDatasetOX(Dataset):
 
         data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
-        ovhidx = torch.from_numpy(data['ovhidx']).long()
-        xvhidx = torch.from_numpy(data['xvhidx']).long()
+        ovhidx = torch.from_numpy(data['ovhidx']).float()
+        xvhidx = torch.from_numpy(data['xvhidx']).float()
 
-        one_hot_o = F.one_hot(ovhidx, num_classes=self.target_size[1]).contiguous()[None,:,:]
-        one_hot_x = F.one_hot(xvhidx, num_classes=self.target_size[1]).contiguous()[None,:,:]
+        # Load sigmas
+        osigma = torch.from_numpy(data['osigma']).float()
+        xsigma = torch.from_numpy(data['xsigma']).float()
+
+        # Create Gaussian soft labels
+        # ovhidx contains heights (0 to 511). We dynamically use the image's height axis dimension.
+        num_classes = image.shape[2] 
+        y_axis = torch.arange(num_classes).float()
+        
+        gaussian_o = torch.exp(-0.5 * ((y_axis.unsqueeze(0) - ovhidx.unsqueeze(1)) / osigma.unsqueeze(1))**2)
+        gaussian_x = torch.exp(-0.5 * ((y_axis.unsqueeze(0) - xvhidx.unsqueeze(1)) / xsigma.unsqueeze(1))**2)
+        
+        # Normalize so probabilities sum to 1
+        one_hot_o = (gaussian_o / (gaussian_o.sum(dim=-1, keepdim=True) + 1e-8)).unsqueeze(0)
+        one_hot_x = (gaussian_x / (gaussian_x.sum(dim=-1, keepdim=True) + 1e-8)).unsqueeze(0)
 
         # random crop and resize on both image and labels
         cropped = self.cropresize(torch.cat([image,one_hot_o,one_hot_x],dim=0))
         image = cropped[0:1,:,:]
-        label_o = torch.argmax(cropped[1,:,:].long(), dim=-1).long()
-        label_x = torch.argmax(cropped[2,:,:].long(), dim=-1).long()
+        
+        # Extract the cropped soft labels (we completely drop the old argmax logic!)
+        target_o = cropped[1:2,:,:]
+        target_x = cropped[2:3,:,:]
+        
+        # Re-normalize just in case the cropresize interpolation slightly altered the sums
+        target_o = target_o / (target_o.sum(dim=-1, keepdim=True) + 1e-8)
+        target_x = target_x / (target_x.sum(dim=-1, keepdim=True) + 1e-8)
 
         target = {}
         target["image"] = image
-        target["gt"] = torch.cat([label_o[None,:], label_x[None,:]], dim=0)
-
-        # target["gt"] = torch.cat([one_hot_o, one_hot_x], dim=0)
+        target["gt"] = torch.cat([target_o, target_x], dim=0)
 
         return target
 

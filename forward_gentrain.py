@@ -47,37 +47,43 @@ class GenTrain():
     def sampling_fps(self, z, mode): # sampling_fps(self, z:np.ndarray, mode:int) -> tuple[np.ndarray, np.ndarray]:
         # mode = 0
         if mode == 0:
-            a = np.array([np.random.uniform(0.5, 1.5) * 0.9,  #a[0]
-                np.random.uniform(300, 500),           #a[1]
-                np.random.uniform(0.65, 1.33) * 125,     #a[2]
+            a = np.array([
+                np.random.uniform(0.5, 1.5) * 0.9,      # a[0]: Parabola 1 Peak Amplitude (Density)
+                np.random.uniform(250, 500),            # a[1]: Parabola 1 Peak Altitude (z)
+                np.random.uniform(0.65, 1.33) * 100,    # a[2]: Parabola 1 Width (Semithickness)
 
-                np.random.uniform(0.1, 1.5) * 0.15,      #a[3]
-                np.random.uniform(120,300),            #a[4]
-                np.random.uniform(0.65, 1.33) * 100,    #a[5]
+                np.random.uniform(0.1, 1.5) * 0.15,     # a[3]: Parabola 2 Peak Amplitude (Density)
+                np.random.uniform(100, 350),            # a[4]: Parabola 2 Peak Altitude (z)
+                np.random.uniform(0.65, 1.33) * 100,    # a[5]: Parabola 2 Width (Semithickness)
 
-                np.random.uniform(0.0, 1.2) * 0.01 * (np.random.uniform(0.0, 1)>0.3),     #a[6]
-                np.random.uniform(120,450),            #a[7]
-                np.random.uniform(0.5, 1.5) * 150,  #a[8]
-                np.random.uniform(5,10)            #beta
+                np.random.uniform(0.0, 1.2) * 0.03 * (np.random.uniform(0.0, 1)>0.2),  # a[6]: Parabola 3 Peak Amplitude (Density)
+                np.random.uniform(120, 450),            # a[7]: Parabola 3 Peak Altitude (z)
+                np.random.uniform(0.5, 1.5) * 100,      # a[8]: Parabola 3 Width (Semithickness)
+                
+                np.random.uniform(5, 10)                # a[9]: Beta (Softplus smoothing parameter)
                 ])
             # a = [0.89648,372.33907,195.62163,0.04607,246.51493,212.841,0.00774,138.50969,290.08269,11.87427]
             fps = self.fps_parabolic(a,z,beta=a[-1])
             # foE = fps[np.argmin(np.abs(a[4] - z))]
         else: # mode == 1:
-            a = np.array([random.uniform(0.75, 1.20) * 10,
-                random.uniform(300, 500),
-                random.uniform(0.75,1.25) * 22,  
-                random.uniform(0.8,1.2) * 3.2,  
-                random.uniform(100,180),
-                random.uniform(0.8,1.2) * 10,
-                random.uniform(0.8,1.2)])
+            a = np.array([
+                random.uniform(0.75, 1.20) * 10, # a[0]: Gaussian 1 Peak Amplitude
+                random.uniform(300, 500),        # a[1]: Gaussian 1 Peak Altitude (z)
+                random.uniform(0.5, 1.5) * 15, # a[2]: Gaussian 1 Width
+                
+                random.uniform(0.8, 1.2) * 3.2,  # a[3]: Gaussian 2 Peak Amplitude
+                random.uniform(100, 300),        # a[4]: Gaussian 2 Peak Altitude (z)
+                random.uniform(0.5, 1.5) * 10,   # a[5]: Gaussian 2 Width
+                
+                random.uniform(1, 1.2)         # a[6]: Shape Factor (Exponent applied to both Gaussians)
+                ])
             fps = self.fps_gauss(a,z)
             # foE = fps[np.argmin(np.abs(a[4] - z))]
         # else:
         #     return None
         return fps,a
 
-    def Coo2Mat(self, fvs:np.ndarray, vhs:np.ndarray, vh_start = 160, fs_start = None) -> np.ndarray:
+    def Coo2Mat(self, fvs:np.ndarray, vhs:np.ndarray, vh_start = 40, fs_start = None) -> np.ndarray:
         # Turning the output pairs from forward model to continuous traces stored in matrix
         trace_mat = np.zeros([self.hts.shape[0],self.freqs.shape[0]])
         if vhs.shape[0] == 0 or fvs.shape[0] == 0:
@@ -99,17 +105,20 @@ class GenTrain():
 
     def scatter_around_points(self, x_data : np.ndarray, y_data : np.ndarray, sigma_x, sigma_y, points=5):
         # Widen the trace
-        noisy_x = [] #x_data.tolist()
-        noisy_y = [] #y_data.tolist()
         M, N = self.freqs.shape[0], self.hts.shape[0]
         points = np.random.randint(3,5+1)
-        for idx in range(x_data.shape[0]):
-            nx = np.rint(x_data[idx] + np.random.uniform(-sigma_x,sigma_x,points))
-            ny = np.rint(y_data[idx] + np.random.uniform(-sigma_y,sigma_y,points))
-            valid = (ny >=0) & (ny < N) & (nx >= 0) & (nx < M)
-            noisy_x += nx[valid].tolist()
-            noisy_y += ny[valid].tolist()
-        return np.array(noisy_x), np.array(noisy_y)
+        
+        if x_data.shape[0] == 0:
+            return np.array([]), np.array([])
+            
+        # 1. Generate all random offsets at once and add the base coordinates via broadcasting
+        nx = np.rint(x_data[:, None] + np.random.uniform(-sigma_x, sigma_x, (x_data.shape[0], points))).flatten()
+        ny = np.rint(y_data[:, None] + np.random.uniform(-sigma_y, sigma_y, (y_data.shape[0], points))).flatten()
+        
+        # 2. Vectorized bounds check across the entire flattened array
+        valid = (ny >= 0) & (ny < N) & (nx >= 0) & (nx < M)
+        
+        return nx[valid], ny[valid]
 
     def creating_multihop(self, fvs, vhs, fmin = 3):
         outmat = 0
@@ -121,7 +130,8 @@ class GenTrain():
         for i in range(2,np.random.randint(3,5)):
             vhs2 = vhs*i
             for j in range(3):
-                mh_trace = self.Coo2Mat(fvs[indices],(vhs2-self.ipp*j)[indices],fs_start=fvs[0])
+                random_fs_start = self.freqs[0] if np.random.uniform(0, 1) < 0.5 else fvs[0]
+                mh_trace = self.Coo2Mat(fvs[indices],(vhs2-self.ipp*j)[indices],fs_start=random_fs_start)
                 ivhs_mh, ifvs_mh = np.nonzero(mh_trace)
                 # Generate noisy data
                 sigma_x = np.random.uniform(1.8,2.2)*i/1.5
@@ -160,6 +170,44 @@ class GenTrain():
         outmat = coo_matrix((np.ones(fvs_thick_x.shape), (vhs_thick_y,fvs_thick_x)), shape=(self.hts.shape[0], self.freqs.shape[0])).toarray()
         outmat = (outmat + inmat) > 0
         return outmat.astype(np.int_)
+
+    def add_horizontal_noise_lines(self, inmat):
+        # Creates broken, dashed horizontal lines typical of RF broadcast interference
+        line_mat = np.zeros([self.hts.shape[0], self.freqs.shape[0]])
+        M = self.freqs.shape[0]
+        N = self.hts.shape[0]
+        
+        for _ in range(np.random.randint(1, 3)): # Create 4 to 12 horizontal bands
+            ivh = np.random.randint(0, N)
+            thickness = np.random.randint(3, 7)
+            h_start = max(0, ivh - thickness)
+            h_end = min(N, ivh + thickness)
+            
+            # Start somewhere in the left third of the image
+            current_f = np.random.randint(0, M // 3)
+            while current_f < M:
+                # Length of the visible dash (Morse-code like)
+                dash_len = np.random.randint(5, 40)
+                end_f = min(current_f + dash_len, M)
+                
+                # Fill the dash
+                line_mat[h_start:h_end, current_f:end_f] = 1
+                
+                # Gap before the next dash
+                gap_len = np.random.randint(3, 15)
+                current_f = end_f + gap_len
+                
+        ivhs, ifvs = np.nonzero(line_mat)
+        if len(ivhs) > 0:
+            sigma_x = np.random.uniform(1, 5)
+            sigma_y = np.random.uniform(3, 8)
+            # Scatter them slightly to match the messy noise texture
+            fvs_thick_x, vhs_thick_y = self.scatter_around_points(np.array(ifvs), np.array(ivhs), sigma_x=sigma_x, sigma_y=sigma_y)
+            outmat = coo_matrix((np.ones(fvs_thick_x.shape), (vhs_thick_y, fvs_thick_x)), shape=(N, M)).toarray()
+            outmat = (outmat + inmat) > 0
+            return outmat.astype(np.int_)
+        return inmat
+
 
     def gen_noise_blocks(self):
         M = self.freqs.shape[0]
@@ -259,7 +307,7 @@ class GenTrain():
         # print(fx_peaks)
         
         if fo_peaks.shape[0] >0 and fx_peaks.shape[0] >0:
-            if np.random.uniform(0,1)<0.2:  # 20% chance cutting the first cusps
+            if np.random.uniform(0,1)<0.05:  # 20% chance cutting the first cusps
                 fo_start = fvsO[fo_peaks[-1]]
                 fx_start = fvsX[fx_peaks[-1]]
 
@@ -294,6 +342,13 @@ class GenTrain():
         noise_map = self.gen_noise_blocks()
         if np.random.uniform(0,1) < 0.5: 
             noise_map = self.add_noise_lines(noise_map)
+            
+        omode_clean = np.copy(omode)
+        xmode_clean = np.copy(xmode)
+        
+        # 70% chance to add horizontal broadcast interference noise
+        if np.random.uniform(0,1) < 0.7:
+            noise_map = self.add_horizontal_noise_lines(noise_map)
         
         multihop_map = self.creating_multihop(fvsO, vhsO, fo_start)#fmin=foe+1) 
         multihop_map += self.creating_multihop(fvsX, vhsX, fx_start)# fmin=foe+1)
@@ -330,6 +385,19 @@ class GenTrain():
 
         ovhidx = np.array([np.argmin(np.abs(vhsO[np.argmin(np.abs(fvsO - self.freqs[i]))] - self.hts)) if opres[i] !=0 else 0 for i in np.arange(opres.shape[0])])
         xvhidx = np.array([np.argmin(np.abs(vhsX[np.argmin(np.abs(fvsX - self.freqs[i]))] - self.hts)) if xpres[i] !=0 else 0 for i in np.arange(xpres.shape[0])])
+
+        # Calculate Gaussian sigmas (trace width) for each frequency column
+        ovh_sigma = np.zeros(self.freqs.shape[0])
+        xvh_sigma = np.zeros(self.freqs.shape[0])
+        for i in range(self.freqs.shape[0]):
+            if opres[i] != 0:
+                o_indices = np.nonzero(omode_clean[:, i])[0]
+                if len(o_indices) > 0:
+                    ovh_sigma[i] = np.std(o_indices) + 1.0
+            if xpres[i] != 0:
+                x_indices = np.nonzero(xmode_clean[:, i])[0]
+                if len(x_indices) > 0:
+                    xvh_sigma[i] = np.std(x_indices) + 1.0
 
         fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
         ax1 = axes[0]
@@ -378,7 +446,11 @@ class GenTrain():
             imgTrain = Image.fromarray(np.flip((omode+xmode+noise_map+multihop_map)>0,axis=0).astype(dtype=np.uint8)*255, 'L')
             imgTrain.save(f"{self.training_dir}/train/{file_name}")
             
-            np.save(f"{self.training_dir}/npy/{file_name}", {'opres':opres, 'xpres':xpres, 'ovhidx':ovhidx, 'xvhidx':xvhidx})
+            np.save(f"{self.training_dir}/npy/{file_name}", {
+                'opres':opres, 'xpres':xpres, 
+                'ovhidx':ovhidx, 'xvhidx':xvhidx,
+                'osigma':ovh_sigma, 'xsigma':xvh_sigma
+            })
             # omode_data = np.zeros((*omode.shape,3), dtype=np.uint8)
             # omode_data[:,:,0] = np.flip(O_trace>0,axis=0) * 255
         
@@ -430,12 +502,12 @@ if __name__ == "__main__":
 
     gt.graph_generate(fes, Z, dz, savedata = False)
 
-    if False:
+    if True:
         from joblib import Parallel, delayed
         import multiprocessing as mp
 
         para_func = lambda x : gt.graph_generate(fes, Z, dz, savedata = True)
 
         # Use all available CPU cores to generate the graphs in parallel
-        Parallel(n_jobs=mp.cpu_count()-0)(delayed(para_func)(_) for _ in range(10000))
+        Parallel(n_jobs=mp.cpu_count()-0)(delayed(para_func)(_) for _ in range(40000))
 
