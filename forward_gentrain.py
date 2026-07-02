@@ -52,13 +52,13 @@ class GenTrain():
                 np.random.uniform(250, 500),            # a[1]: Parabola 1 Peak Altitude (z)
                 np.random.uniform(0.65, 1.33) * 100,    # a[2]: Parabola 1 Width (Semithickness)
 
-                np.random.uniform(0.1, 1.5) * 0.15,     # a[3]: Parabola 2 Peak Amplitude (Density)
+                np.random.uniform(0.1, 1.5) * 0.12,     # a[3]: Parabola 2 Peak Amplitude (Density)
                 np.random.uniform(100, 350),            # a[4]: Parabola 2 Peak Altitude (z)
                 np.random.uniform(0.65, 1.33) * 100,    # a[5]: Parabola 2 Width (Semithickness)
 
-                np.random.uniform(0.0, 1.2) * 0.03 * (np.random.uniform(0.0, 1)>0.2),  # a[6]: Parabola 3 Peak Amplitude (Density)
-                np.random.uniform(120, 450),            # a[7]: Parabola 3 Peak Altitude (z)
-                np.random.uniform(0.5, 1.5) * 100,      # a[8]: Parabola 3 Width (Semithickness)
+                np.random.uniform(0.0, 1.2) * 0.05 * (np.random.uniform(0.0, 1)>0.3),  # a[6]: Parabola 3 Peak Amplitude (Density)
+                np.random.uniform(80, 140),            # a[7]: Parabola 3 Peak Altitude (z)
+                np.random.uniform(0.5, 1.5) * 50,      # a[8]: Parabola 3 Width (Semithickness)
                 
                 np.random.uniform(5, 10)                # a[9]: Beta (Softplus smoothing parameter)
                 ])
@@ -299,17 +299,24 @@ class GenTrain():
             if vhsX[i] - vhsX[i-1] > 80:
                 asym_fX += [fvsX[i]]
 
-        fo_start = self.freqs[0]
-        fx_start = self.freqs[0]
         fo_peaks, fo_peaks_properties = find_peaks(vhsO,prominence=[3,None],width=1)
-        # print(fo_peaks)
         fx_peaks, fx_peaks_properties = find_peaks(vhsX,prominence=[3,None],width=1)
-        # print(fx_peaks)
         
-        if fo_peaks.shape[0] >0 and fx_peaks.shape[0] >0:
-            if np.random.uniform(0,1)<0.05:  # 20% chance cutting the first cusps
+        rand_val = np.random.uniform(0, 1)
+        if rand_val < 0.25:  # 25% chance cutting at the first cusps
+            if fo_peaks.shape[0] > 0 and fx_peaks.shape[0] > 0:
                 fo_start = fvsO[fo_peaks[-1]]
                 fx_start = fvsX[fx_peaks[-1]]
+            else:
+                fo_start = self.freqs[0]
+                fx_start = self.freqs[0]
+        elif rand_val < 0.5:  # 25% chance None (starts at beginning)
+            fo_start = None
+            fx_start = None
+        else:  # 50% chance random cutoff between 0 and 100 to simulate low frequency absorption
+            start_idx = np.random.randint(0, 100)
+            fo_start = self.freqs[start_idx]
+            fx_start = self.freqs[start_idx]
 
         O_trace = self.Coo2Mat(fvsO,vhsO, fs_start=fo_start)
         X_trace = self.Coo2Mat(fvsX,vhsX, fs_start=fx_start)
@@ -393,11 +400,11 @@ class GenTrain():
             if opres[i] != 0:
                 o_indices = np.nonzero(omode_clean[:, i])[0]
                 if len(o_indices) > 0:
-                    ovh_sigma[i] = np.std(o_indices) + 1.0
+                    ovh_sigma[i] = max(np.std(o_indices), 0.5)
             if xpres[i] != 0:
                 x_indices = np.nonzero(xmode_clean[:, i])[0]
                 if len(x_indices) > 0:
-                    xvh_sigma[i] = np.std(x_indices) + 1.0
+                    xvh_sigma[i] = max(np.std(x_indices), 0.5)
 
         fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
         ax1 = axes[0]
@@ -415,23 +422,35 @@ class GenTrain():
         #     ax1.plot(fvsX[fx_peaks],vhsX[fx_peaks],'x')
 
         ax2 = axes[1]
+        
+        # Generate Gaussian soft-labels for visualization
+        y_grid = np.arange(self.hts.shape[0])[:, None]
+        safe_osigma = np.maximum(ovh_sigma, 0.5)
+        safe_xsigma = np.maximum(xvh_sigma, 0.5)
+        
+        pdf_o = np.exp(-0.5 * ((y_grid - ovhidx[None, :]) / safe_osigma[None, :])**2) * opres[None, :]
+        pdf_x = np.exp(-0.5 * ((y_grid - xvhidx[None, :]) / safe_xsigma[None, :])**2) * xpres[None, :]
+        
+        # Mask near-zero probabilities to make them transparent
+        pdf_o_plot = np.where(pdf_o > 0.01, pdf_o, np.nan)
+        pdf_x_plot = np.where(pdf_x > 0.01, pdf_x, np.nan)
 
-        # ax2.imshow((omode>0).astype(np.int_) + 2* O_trace,origin='lower')
-        ax2.imshow(np.vstack([opres]*omode.shape[0]))
-        ax2.scatter(np.arange(opres.shape[0]), ovhidx)
-        ax2.set_title('O-mode trace')
-        # ax2.set_axis_off()
-        ax2.set_xlim(0,408)
-        ax2.set_ylim(0,512)
+        # Plot O-mode: Grey background mask + Gaussian overlay + Tiny red peak scatter
+        ax2.imshow(np.vstack([opres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower')
+        ax2.imshow(pdf_o_plot, cmap='viridis', origin='lower')
+        ax2.scatter(np.arange(opres.shape[0]), ovhidx, s=0.5, c='red', alpha=0.8)
+        ax2.set_title('O-mode Gaussian Label')
+        ax2.set_xlim(0, self.freqs.shape[0])
+        ax2.set_ylim(0, self.hts.shape[0])
 
         ax3 = axes[2]
-        # ax3.imshow((xmode>0).astype(np.int_) + 2*X_trace,origin='lower')
-        ax3.imshow(np.vstack([xpres]*xmode.shape[0]))
-        ax3.scatter(np.arange(xpres.shape[0]), xvhidx)
-        ax3.set_title('X-mode trace')
-        # ax3.set_axis_off()
-        ax3.set_xlim(0,408)
-        ax3.set_ylim(0,512)
+        # Plot X-mode: Grey background mask + Gaussian overlay + Tiny red peak scatter
+        ax3.imshow(np.vstack([xpres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower')
+        ax3.imshow(pdf_x_plot, cmap='viridis', origin='lower')
+        ax3.scatter(np.arange(xpres.shape[0]), xvhidx, s=0.5, c='red', alpha=0.8)
+        ax3.set_title('X-mode Gaussian Label')
+        ax3.set_xlim(0, self.freqs.shape[0])
+        ax3.set_ylim(0, self.hts.shape[0])
 
         ax4 = axes[3]
         ax4.imshow((omode+xmode+noise_map+multihop_map)>0,origin='lower')
@@ -486,7 +505,7 @@ if __name__ == "__main__":
     print(ipp)
     # ipp - hts[-1]*1
     gt = GenTrain(freqs,hts,ipp,training_dir,noise_dir)
-    dt0 = datetime.datetime(2016,4,15)
+    dt0 = datetime.datetime(2016,1,14)
     igrf_year = dt0.year + (dt0-datetime.datetime(dt0.year,1,1)).total_seconds() / (
             datetime.datetime(dt0.year+1,1,1)-datetime.datetime(dt0.year,1,1)).total_seconds()
 
@@ -502,7 +521,7 @@ if __name__ == "__main__":
 
     gt.graph_generate(fes, Z, dz, savedata = False)
 
-    if True:
+    if False:
         from joblib import Parallel, delayed
         import multiprocessing as mp
 
