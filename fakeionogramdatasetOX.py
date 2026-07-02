@@ -57,9 +57,13 @@ class ParabolaIonoDatasetOX(Dataset):
         ovhidx = torch.from_numpy(data['ovhidx']).float()
         xvhidx = torch.from_numpy(data['xvhidx']).float()
 
-        # Load sigmas
+        # Load sigmas (clamping removed, forward model guarantees minimum width of 0.5 for valid traces)
         osigma = torch.from_numpy(data['osigma']).float()
         xsigma = torch.from_numpy(data['xsigma']).float()
+        
+        # Load presence masks (needed for fallback)
+        opres = torch.from_numpy(data['opres']).float()
+        xpres = torch.from_numpy(data['xpres']).float()
 
         # Create Gaussian soft labels
         # ovhidx contains heights (0 to 511). We dynamically use the image's height axis dimension.
@@ -70,8 +74,18 @@ class ParabolaIonoDatasetOX(Dataset):
         gaussian_x = torch.exp(-0.5 * ((y_axis.unsqueeze(0) - xvhidx.unsqueeze(1)) / xsigma.unsqueeze(1))**2)
         
         # Normalize so probabilities sum to 1
-        one_hot_o = (gaussian_o / (gaussian_o.sum(dim=-1, keepdim=True) + 1e-8)).unsqueeze(0)
-        one_hot_x = (gaussian_x / (gaussian_x.sum(dim=-1, keepdim=True) + 1e-8)).unsqueeze(0)
+        pdf_o = gaussian_o / (gaussian_o.sum(dim=-1, keepdim=True) + 1e-8)
+        pdf_x = gaussian_x / (gaussian_x.sum(dim=-1, keepdim=True) + 1e-8)
+        
+        # Fall back to strict one-hot [1, 0, 0...] for empty columns
+        zero_label = torch.zeros(num_classes).float()
+        zero_label[0] = 1.0
+        
+        pdf_o = torch.where((opres == 0).unsqueeze(1), zero_label.unsqueeze(0), pdf_o)
+        pdf_x = torch.where((xpres == 0).unsqueeze(1), zero_label.unsqueeze(0), pdf_x)
+        
+        one_hot_o = pdf_o.unsqueeze(0)
+        one_hot_x = pdf_x.unsqueeze(0)
 
         # random crop and resize on both image and labels
         cropped = self.cropresize(torch.cat([image,one_hot_o,one_hot_x],dim=0))
