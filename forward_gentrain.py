@@ -49,31 +49,45 @@ class GenTrain():
         if mode == 0:
             a = np.array([
                 np.random.uniform(0.5, 1.5) * 0.9,      # a[0]: Parabola 1 Peak Amplitude (Density)
-                np.random.uniform(250, 500),            # a[1]: Parabola 1 Peak Altitude (z)
+                np.random.uniform(0.8, 1.2) * 375,          # a[1]: Parabola 1 Peak Altitude (z)
                 np.random.uniform(0.65, 1.33) * 100,    # a[2]: Parabola 1 Width (Semithickness)
 
-                np.random.uniform(0.1, 1.5) * 0.12,     # a[3]: Parabola 2 Peak Amplitude (Density)
-                np.random.uniform(100, 350),            # a[4]: Parabola 2 Peak Altitude (z)
-                np.random.uniform(0.65, 1.33) * 100,    # a[5]: Parabola 2 Width (Semithickness)
+                np.random.uniform(0.66, 1.5) * 0.22,     # a[3]: Parabola 2 Peak Amplitude (Density)
+                np.random.uniform(0.8, 1.2) * 261,            # a[4]: Parabola 2 Peak Altitude (z)
+                np.random.uniform(0.65, 1.33) * 144,    # a[5]: Parabola 2 Width (Semithickness)
 
-                np.random.uniform(0.0, 1.2) * 0.05 * (np.random.uniform(0.0, 1)>0.3),  # a[6]: Parabola 3 Peak Amplitude (Density)
-                np.random.uniform(80, 140),            # a[7]: Parabola 3 Peak Altitude (z)
-                np.random.uniform(0.5, 1.5) * 50,      # a[8]: Parabola 3 Width (Semithickness)
+                np.random.uniform(0.6, 1.2) * 0.045 * (np.random.uniform(0.0, 1)>0.3),  # a[6]: Parabola 3 Peak Amplitude (Density)
+                np.random.uniform(0.8, 1.2) * 130,         # a[7]: Parabola 3 Peak Altitude (z)
+                np.random.uniform(0.8, 1.2) * 40,      # a[8]: Parabola 3 Width (Semithickness)
                 
                 np.random.uniform(5, 10)                # a[9]: Beta (Softplus smoothing parameter)
                 ])
-            # a = [0.89648,372.33907,195.62163,0.04607,246.51493,212.841,0.00774,138.50969,290.08269,11.87427]
+            fps = self.fps_parabolic(a,z,beta=a[-1])
+        
+        elif mode == 2:
+            a = np.array([
+                np.random.uniform(0.3, 1.8) * 0.4,      # a[0]: Parabola 1 Peak Amplitude (Density)
+                np.random.uniform(220, 400), # 375           # a[1]: Parabola 1 Peak Altitude (z)
+                np.random.uniform(0.65, 1.33) * 140,    # a[2]: Parabola 1 Width (Semithickness)
+                0,     # a[3]: Parabola 2 Peak Amplitude (Density)
+                250,            # a[4]: Parabola 2 Peak Altitude (z)
+                50,    # a[5]: Parabola 2 Width (Semithickness)
+                0,  # a[6]: Parabola 3 Peak Amplitude (Density)
+                100,   # 130         # a[7]: Parabola 3 Peak Altitude (z)
+                50,      # a[8]: Parabola 3 Width (Semithickness)
+                np.random.uniform(5, 10)                # a[9]: Beta (Softplus smoothing parameter)
+                ])
             fps = self.fps_parabolic(a,z,beta=a[-1])
             # foE = fps[np.argmin(np.abs(a[4] - z))]
         else: # mode == 1:
             a = np.array([
                 random.uniform(0.75, 1.20) * 10, # a[0]: Gaussian 1 Peak Amplitude
-                random.uniform(300, 500),        # a[1]: Gaussian 1 Peak Altitude (z)
-                random.uniform(0.5, 1.5) * 15, # a[2]: Gaussian 1 Width
+                random.uniform(300, 500),  #409      # a[1]: Gaussian 1 Peak Altitude (z)
+                random.uniform(0.5, 1.5) * 20.8, # a[2]: Gaussian 1 Width
                 
                 random.uniform(0.8, 1.2) * 3.2,  # a[3]: Gaussian 2 Peak Amplitude
-                random.uniform(100, 300),        # a[4]: Gaussian 2 Peak Altitude (z)
-                random.uniform(0.5, 1.5) * 10,   # a[5]: Gaussian 2 Width
+                random.uniform(100, 300),  #200      # a[4]: Gaussian 2 Peak Altitude (z)
+                random.uniform(0.5, 1.5) * 7.4,   # a[5]: Gaussian 2 Width
                 
                 random.uniform(1, 1.2)         # a[6]: Shape Factor (Exponent applied to both Gaussians)
                 ])
@@ -122,6 +136,7 @@ class GenTrain():
 
     def creating_multihop(self, fvs, vhs, fmin = 3):
         outmat = 0
+        fmin = self.freqs[0] if fmin is None else fmin
         fmin_idx = np.argmin(np.abs(fvs-fmin))
         delta_vhs = np.abs(vhs[fmin_idx:]-vhs[fmin_idx-1:-1])
         fvs = np.copy(fvs[fmin_idx:])
@@ -177,11 +192,18 @@ class GenTrain():
         M = self.freqs.shape[0]
         N = self.hts.shape[0]
         
-        for _ in range(np.random.randint(1, 3)): # Create 4 to 12 horizontal bands
-            ivh = np.random.randint(0, N)
-            thickness = np.random.randint(3, 7)
-            h_start = max(0, ivh - thickness)
-            h_end = min(N, ivh + thickness)
+        band_heights = []
+        
+        # High probability (80%) for the relatively fixed primary band
+        if np.random.rand() < 0.8:
+            band_heights.append(np.random.randint(N // 5, N // 3))
+            
+        # Lower probability (40%) for the moving, random bands
+        if np.random.rand() < 0.4:
+            for _ in range(np.random.randint(1, 3)): # Create 1 to 2 random bands
+                band_heights.append(np.random.randint(0, N))
+        
+        for ivh in band_heights:
             
             # Start somewhere in the left third of the image
             current_f = np.random.randint(0, M // 3)
@@ -190,8 +212,8 @@ class GenTrain():
                 dash_len = np.random.randint(5, 40)
                 end_f = min(current_f + dash_len, M)
                 
-                # Fill the dash
-                line_mat[h_start:h_end, current_f:end_f] = 1
+                # Fill the dash center line
+                line_mat[ivh, current_f:end_f] = 1
                 
                 # Gap before the next dash
                 gap_len = np.random.randint(3, 15)
@@ -200,9 +222,18 @@ class GenTrain():
         ivhs, ifvs = np.nonzero(line_mat)
         if len(ivhs) > 0:
             sigma_x = np.random.uniform(1, 5)
-            sigma_y = np.random.uniform(3, 8)
-            # Scatter them slightly to match the messy noise texture
-            fvs_thick_x, vhs_thick_y = self.scatter_around_points(np.array(ifvs), np.array(ivhs), sigma_x=sigma_x, sigma_y=sigma_y)
+            sigma_y = np.random.uniform(3, 10) # Gaussian spread for band width
+            points = np.random.randint(15, 30) # Higher density to form the band from a 1D line
+            
+            # Gaussian scatter in Y for dense center / sparse edges, Uniform scatter in X
+            fvs_thick_x = np.rint(ifvs[:, None] + np.random.uniform(-sigma_x, sigma_x, (ifvs.shape[0], points))).flatten()
+            vhs_thick_y = np.rint(ivhs[:, None] + np.random.normal(0, sigma_y, (ivhs.shape[0], points))).flatten()
+            
+            # Filter bounds
+            valid = (vhs_thick_y >= 0) & (vhs_thick_y < N) & (fvs_thick_x >= 0) & (fvs_thick_x < M)
+            fvs_thick_x = fvs_thick_x[valid]
+            vhs_thick_y = vhs_thick_y[valid]
+            
             outmat = coo_matrix((np.ones(fvs_thick_x.shape), (vhs_thick_y, fvs_thick_x)), shape=(N, M)).toarray()
             outmat = (outmat + inmat) > 0
             return outmat.astype(np.int_)
@@ -287,7 +318,7 @@ class GenTrain():
         return mat
 
     def graph_generate(self, fes, Z, dz = 0.5, savedata = False):
-        fps,ppama=self.sampling_fps(Z, mode = np.random.uniform(0,1)<0.5)
+        fps,ppama=self.sampling_fps(Z, mode=np.random.choice([0, 1, 2], p=[0.65, 0.25, 0.1]))
         fvsO,vhsO,fvsX,vhsX=OXmode_cython(fps,fes,dz) # x1 y1 x2 y2 
         
         asym_fO = []
@@ -303,16 +334,16 @@ class GenTrain():
         fx_peaks, fx_peaks_properties = find_peaks(vhsX,prominence=[3,None],width=1)
         
         rand_val = np.random.uniform(0, 1)
-        if rand_val < 0.25:  # 25% chance cutting at the first cusps
+        if rand_val < 0.3:  # 30% chance cutting at the last cusps
             if fo_peaks.shape[0] > 0 and fx_peaks.shape[0] > 0:
-                fo_start = fvsO[fo_peaks[-1]]
-                fx_start = fvsX[fx_peaks[-1]]
+                fo_start = fvsO[fo_peaks[0]]
+                fx_start = fvsX[fx_peaks[0]]
             else:
                 fo_start = self.freqs[0]
                 fx_start = self.freqs[0]
-        elif rand_val < 0.5:  # 25% chance None (starts at beginning)
-            fo_start = None
-            fx_start = None
+        elif rand_val < 0.5:  # 20% chance None (starts at beginning)
+            fo_start = self.freqs[0]
+            fx_start = self.freqs[0]
         else:  # 50% chance random cutoff between 0 and 100 to simulate low frequency absorption
             start_idx = np.random.randint(0, 100)
             fo_start = self.freqs[start_idx]
@@ -383,6 +414,13 @@ class GenTrain():
         opres = (np.sum(O_trace,axis=0)>0).astype(np.int_)
         xpres = (np.sum(X_trace,axis=0)>0).astype(np.int_)
 
+        if np.sum(opres) > 2/3 * self.freqs.shape[0] and np.random.rand() < 0.10:
+            crop_idx = np.random.randint(int(0.1 * self.freqs.shape[0]), int(0.4 * self.freqs.shape[0]))
+            opres[:crop_idx] = 0
+            xpres[:crop_idx] = 0
+            O_trace[:, :crop_idx] = 0
+            X_trace[:, :crop_idx] = 0
+
         if np.random.uniform(0,1) < 0.05:# 0.05: # 5% chance negative data
             omode = np.zeros(omode.shape, dtype=np.uint8)
             xmode = np.zeros(xmode.shape, dtype=np.uint8)
@@ -400,11 +438,11 @@ class GenTrain():
             if opres[i] != 0:
                 o_indices = np.nonzero(omode_clean[:, i])[0]
                 if len(o_indices) > 0:
-                    ovh_sigma[i] = max(np.std(o_indices), 0.5)
+                    ovh_sigma[i] = np.std(o_indices)**0.8
             if xpres[i] != 0:
                 x_indices = np.nonzero(xmode_clean[:, i])[0]
                 if len(x_indices) > 0:
-                    xvh_sigma[i] = max(np.std(x_indices), 0.5)
+                    xvh_sigma[i] = np.std(x_indices)**0.8
 
         fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
         ax1 = axes[0]
@@ -416,10 +454,10 @@ class GenTrain():
         ax1.set_xlabel('Frequency [MHz]')
         ax1.set_ylabel('Height [km]')
         ax1.legend()
-        # if fo_peaks.shape[0] > 0:
-        #     ax1.plot(fvsO[fo_peaks],vhsO[fo_peaks],'x')
-        # if fx_peaks.shape[0] > 0:
-        #     ax1.plot(fvsX[fx_peaks],vhsX[fx_peaks],'x')
+        if fo_peaks.shape[0] > 0:
+            ax1.plot(fvsO[fo_peaks],vhsO[fo_peaks],'x')
+        if fx_peaks.shape[0] > 0:
+            ax1.plot(fvsX[fx_peaks],vhsX[fx_peaks],'x')
 
         ax2 = axes[1]
         
@@ -436,24 +474,24 @@ class GenTrain():
         pdf_x_plot = np.where(pdf_x > 0.01, pdf_x, np.nan)
 
         # Plot O-mode: Grey background mask + Gaussian overlay + Tiny red peak scatter
-        ax2.imshow(np.vstack([opres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower')
-        ax2.imshow(pdf_o_plot, cmap='viridis', origin='lower')
-        ax2.scatter(np.arange(opres.shape[0]), ovhidx, s=0.5, c='red', alpha=0.8)
+        ax2.imshow(np.vstack([opres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower', interpolation='nearest')
+        ax2.imshow(pdf_o_plot, cmap='viridis', origin='lower', interpolation='nearest')
+        ax2.scatter(np.arange(opres.shape[0]), ovhidx, s=0.5, c='red', alpha=0.70)
         ax2.set_title('O-mode Gaussian Label')
         ax2.set_xlim(0, self.freqs.shape[0])
         ax2.set_ylim(0, self.hts.shape[0])
 
         ax3 = axes[2]
         # Plot X-mode: Grey background mask + Gaussian overlay + Tiny red peak scatter
-        ax3.imshow(np.vstack([xpres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower')
-        ax3.imshow(pdf_x_plot, cmap='viridis', origin='lower')
-        ax3.scatter(np.arange(xpres.shape[0]), xvhidx, s=0.5, c='red', alpha=0.8)
+        ax3.imshow(np.vstack([xpres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower', interpolation='nearest')
+        ax3.imshow(pdf_x_plot, cmap='viridis', origin='lower', interpolation='nearest')
+        ax3.scatter(np.arange(xpres.shape[0]), xvhidx, s=0.5, c='red', alpha=0.70)
         ax3.set_title('X-mode Gaussian Label')
         ax3.set_xlim(0, self.freqs.shape[0])
         ax3.set_ylim(0, self.hts.shape[0])
 
         ax4 = axes[3]
-        ax4.imshow((omode+xmode+noise_map+multihop_map)>0,origin='lower')
+        ax4.imshow((omode+xmode+noise_map+multihop_map)>0,origin='lower', interpolation='nearest')
         ax4.set_title('Synthetic ionogram')
         ax4.set_axis_off()
 
@@ -521,7 +559,7 @@ if __name__ == "__main__":
 
     gt.graph_generate(fes, Z, dz, savedata = False)
 
-    if False:
+    if True:
         from joblib import Parallel, delayed
         import multiprocessing as mp
 

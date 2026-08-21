@@ -69,7 +69,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/CEbycol_VTonly_40ktrain_GuassLabel_epoch_{epoch_num + 1}_{(i+1)*5}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/CEbycol_VTonly_40ktrain_GuassLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
@@ -169,13 +169,13 @@ optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_deca
 # ce_by_col = CE_by_col().to(device=device)
 ce_criterion = nn.CrossEntropyLoss()
 
-epochs = 40
+epochs = 120
 epoch_elapsed = 0
 losses = []
 val_losses = []
 test_losses = []
 
-# load_checkpoint = torch.load(save_model_path+'CEbycol_VTonly_40ktrain_set_epoch_160_18000_loss0.0000.pth')
+# load_checkpoint = torch.load(save_model_path+'CEbycol_VTonly_40ktrain_GuassLabel_epoch_80_36000_loss0.0000.pth')
 # model.load_state_dict(load_checkpoint['model_state_dict'])
 # optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
 # epoch_elapsed = load_checkpoint['epoch']+1

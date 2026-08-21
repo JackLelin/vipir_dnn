@@ -77,18 +77,18 @@ class ParabolaIonoDatasetOX(Dataset):
         pdf_o = gaussian_o / (gaussian_o.sum(dim=-1, keepdim=True) + 1e-8)
         pdf_x = gaussian_x / (gaussian_x.sum(dim=-1, keepdim=True) + 1e-8)
         
-        # Fall back to strict one-hot [1, 0, 0...] for empty columns
+        # Fall back to a strict target [1, 0, 0...] at bin 0 for empty columns or missing trace pixels (sigma=0)
         zero_label = torch.zeros(num_classes).float()
         zero_label[0] = 1.0
         
-        pdf_o = torch.where((opres == 0).unsqueeze(1), zero_label.unsqueeze(0), pdf_o)
-        pdf_x = torch.where((xpres == 0).unsqueeze(1), zero_label.unsqueeze(0), pdf_x)
+        pdf_o = torch.where(((opres == 0) | (osigma == 0.0)).unsqueeze(1), zero_label.unsqueeze(0), pdf_o)
+        pdf_x = torch.where(((xpres == 0) | (xsigma == 0.0)).unsqueeze(1), zero_label.unsqueeze(0), pdf_x)
         
-        one_hot_o = pdf_o.unsqueeze(0)
-        one_hot_x = pdf_x.unsqueeze(0)
+        soft_label_o = pdf_o.unsqueeze(0)
+        soft_label_x = pdf_x.unsqueeze(0)
 
         # random crop and resize on both image and labels
-        cropped = self.cropresize(torch.cat([image,one_hot_o,one_hot_x],dim=0))
+        cropped = self.cropresize(torch.cat([image, soft_label_o, soft_label_x], dim=0))
         image = cropped[0:1,:,:]
         
         # Extract the cropped soft labels (we completely drop the old argmax logic!)
