@@ -410,7 +410,18 @@ class GenTrain():
 
         omode = morphology.remove_small_holes(omode, area_threshold=10, connectivity=1)
         xmode = morphology.remove_small_holes(xmode, area_threshold=10, connectivity=1)
-        
+        # Optional random rotation to make examples more general
+        if np.random.rand() < 0.5:
+            from scipy.ndimage import rotate
+            angle = np.random.uniform(-15, 15)
+            omode = rotate(omode, angle, reshape=False, order=0)
+            xmode = rotate(xmode, angle, reshape=False, order=0)
+            multihop_map = rotate(multihop_map, angle, reshape=False, order=0)
+            O_trace = rotate(O_trace, angle, reshape=False, order=0)
+            X_trace = rotate(X_trace, angle, reshape=False, order=0)
+            omode_clean = rotate(omode_clean, angle, reshape=False, order=0)
+            xmode_clean = rotate(xmode_clean, angle, reshape=False, order=0)
+
         opres = (np.sum(O_trace,axis=0)>0).astype(np.int_)
         xpres = (np.sum(X_trace,axis=0)>0).astype(np.int_)
 
@@ -428,8 +439,17 @@ class GenTrain():
             opres *= 0
             xpres *= 0
 
-        ovhidx = np.array([np.argmin(np.abs(vhsO[np.argmin(np.abs(fvsO - self.freqs[i]))] - self.hts)) if opres[i] !=0 else 0 for i in np.arange(opres.shape[0])])
-        xvhidx = np.array([np.argmin(np.abs(vhsX[np.argmin(np.abs(fvsX - self.freqs[i]))] - self.hts)) if xpres[i] !=0 else 0 for i in np.arange(xpres.shape[0])])
+        ovhidx = np.zeros(self.freqs.shape[0], dtype=np.int_)
+        xvhidx = np.zeros(self.freqs.shape[0], dtype=np.int_)
+        for i in range(self.freqs.shape[0]):
+            if opres[i] != 0:
+                nz = np.nonzero(O_trace[:, i])[0]
+                if len(nz) > 0:
+                    ovhidx[i] = int(np.median(nz))
+            if xpres[i] != 0:
+                nz = np.nonzero(X_trace[:, i])[0]
+                if len(nz) > 0:
+                    xvhidx[i] = int(np.median(nz))
 
         # Calculate Gaussian sigmas (trace width) for each frequency column
         ovh_sigma = np.zeros(self.freqs.shape[0])
@@ -559,7 +579,7 @@ if __name__ == "__main__":
 
     gt.graph_generate(fes, Z, dz, savedata = False)
 
-    if True:
+    if False:
         from joblib import Parallel, delayed
         import multiprocessing as mp
 
