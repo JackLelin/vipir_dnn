@@ -10,6 +10,7 @@ import glob
 # from utils.dice_score import dice_coeff
 # from utils.loss_functions import BCE_MSE
 # from utils.loss_functions import CE_by_col
+from utils.loss_functions import DBCEF
 
 from unet import UNet
 
@@ -37,7 +38,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
         inputs, labels = data['image'], data['gt']
         inputs, labels = inputs.to(device), labels.to(device)
         outputs = model(inputs)    
-        loss  = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1, labels.shape[-1]))            
+        loss = criterion(outputs[:, 0:2, :, :], labels[:, 0, :, :].long()) + criterion(outputs[:, 2:4, :, :], labels[:, 1, :, :].long())
         val_loss += loss.item()
         del inputs; del labels
     avg_val_loss = val_loss / len(val_loader)
@@ -69,11 +70,10 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/CEbycol_VTonly_40ktrain_GuassLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/BCE_VTonly_40ktrain_SegLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
-    softmax = nn.Softmax(dim=-1)
     with torch.inference_mode():
         img = []
         filename = []
@@ -92,10 +92,8 @@ def test_on_binary_ionograms(model, epoch_num):
         for i in range(batch_size):
             img1,label1 = img[i],label[i]
             label1 = label1.squeeze().to('cpu')
-            # imgO = torch.argmax(label1[0:2,:,:],dim=0).detach().numpy()
-            # imgX = torch.argmax(label1[2:4,:,:],dim=0).detach().numpy()
-            imgO = softmax(label1[0,:,:]).detach().numpy()
-            imgX = softmax(label1[1,:,:]).detach().numpy()
+            imgO = torch.argmax(label1[0:2,:,:], dim=0).detach().numpy()
+            imgX = torch.argmax(label1[2:4,:,:], dim=0).detach().numpy()
 
             fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
             plt.title(f'epoch{epoch_num}_{filename[i]}')
@@ -152,7 +150,7 @@ else: resize = None
 
 
 
-model = UNet(n_channels=1, n_classes=2, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
+model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
 
 model = model.to(device=device)
 model.train()
@@ -163,11 +161,11 @@ momentum = 0.2
 gradient_clipping = 1.0
 
 optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-# dbcefloss = DBCEF()
-# dbcefloss = dbcefloss.to(device=device)
+dbcefloss = DBCEF()
+dbcefloss = dbcefloss.to(device=device)
 # bcemseloss = (BCE_MSE(beta_bce=0.2)).to(device=device)
 # ce_by_col = CE_by_col().to(device=device)
-ce_criterion = nn.CrossEntropyLoss()
+criterion = dbcefloss
 
 epochs = 120
 epoch_elapsed = 0
@@ -175,14 +173,14 @@ losses = []
 val_losses = []
 test_losses = []
 
-# load_checkpoint = torch.load(save_model_path+'CEbycol_VTonly_40ktrain_GuassLabel_epoch_80_36000_loss0.0000.pth')
-# model.load_state_dict(load_checkpoint['model_state_dict'])
-# optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
-# epoch_elapsed = load_checkpoint['epoch']+1
-# test_losses   = load_checkpoint['test_loss']
-# val_losses    = load_checkpoint['val_loss']
-# losses   = load_checkpoint['train_loss']
-# print('epoch_elapsed: ', epoch_elapsed)
+load_checkpoint = torch.load(save_model_path+'BCE_VTonly_40ktrain_SegLabel_epoch_120_36000_loss0.0000.pth')
+model.load_state_dict(load_checkpoint['model_state_dict'])
+optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
+epoch_elapsed = load_checkpoint['epoch']+1
+test_losses   = load_checkpoint['test_loss']
+val_losses    = load_checkpoint['val_loss']
+losses   = load_checkpoint['train_loss']
+print('epoch_elapsed: ', epoch_elapsed)
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 
@@ -199,7 +197,7 @@ for epoch in range(epoch_elapsed,epoch_elapsed+epochs):
             outputs = model(inputs)
             # print('outputs shape',outputs.shape)
             # break
-            loss = ce_criterion(outputs.reshape(-1, outputs.shape[-1]), labels.reshape(-1, labels.shape[-1]))
+            loss = criterion(outputs[:, 0:2, :, :], labels[:, 0, :, :].long()) + criterion(outputs[:, 2:4, :, :], labels[:, 1, :, :].long())
             loss.backward()
             optimizer.step()
             running_loss += loss.item()

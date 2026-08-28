@@ -54,50 +54,17 @@ class ParabolaIonoDatasetOX(Dataset):
 
         data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
-        ovhidx = torch.from_numpy(data['ovhidx']).float()
-        xvhidx = torch.from_numpy(data['xvhidx']).float()
-
-        # Load sigmas (clamping removed, forward model guarantees minimum width of 0.5 for valid traces)
-        osigma = torch.from_numpy(data['osigma']).float()
-        xsigma = torch.from_numpy(data['xsigma']).float()
+        target_o = torch.from_numpy(data['omode_mask']).float()[None,:,:]
+        target_x = torch.from_numpy(data['xmode_mask']).float()[None,:,:]
         
-        # Load presence masks (needed for fallback)
-        opres = torch.from_numpy(data['opres']).float()
-        xpres = torch.from_numpy(data['xpres']).float()
-
-        # Create Gaussian soft labels
-        # ovhidx contains heights (0 to 511). We dynamically use the image's height axis dimension.
-        num_classes = image.shape[2] 
-        y_axis = torch.arange(num_classes).float()
-        
-        gaussian_o = torch.exp(-0.5 * ((y_axis.unsqueeze(0) - ovhidx.unsqueeze(1)) / osigma.unsqueeze(1))**2)
-        gaussian_x = torch.exp(-0.5 * ((y_axis.unsqueeze(0) - xvhidx.unsqueeze(1)) / xsigma.unsqueeze(1))**2)
-        
-        # Normalize so probabilities sum to 1
-        pdf_o = gaussian_o / (gaussian_o.sum(dim=-1, keepdim=True) + 1e-8)
-        pdf_x = gaussian_x / (gaussian_x.sum(dim=-1, keepdim=True) + 1e-8)
-        
-        # Fall back to a strict target [1, 0, 0...] at bin 0 for empty columns or missing trace pixels (sigma=0)
-        zero_label = torch.zeros(num_classes).float()
-        zero_label[0] = 1.0
-        
-        pdf_o = torch.where(((opres == 0) | (osigma == 0.0)).unsqueeze(1), zero_label.unsqueeze(0), pdf_o)
-        pdf_x = torch.where(((xpres == 0) | (xsigma == 0.0)).unsqueeze(1), zero_label.unsqueeze(0), pdf_x)
-        
-        soft_label_o = pdf_o.unsqueeze(0)
-        soft_label_x = pdf_x.unsqueeze(0)
+        target_o = torch.permute(target_o, (0,2,1))
+        target_x = torch.permute(target_x, (0,2,1))
 
         # random crop and resize on both image and labels
-        cropped = self.cropresize(torch.cat([image, soft_label_o, soft_label_x], dim=0))
+        cropped = self.cropresize(torch.cat([image, target_o, target_x], dim=0))
         image = cropped[0:1,:,:]
-        
-        # Extract the cropped soft labels (we completely drop the old argmax logic!)
         target_o = cropped[1:2,:,:]
         target_x = cropped[2:3,:,:]
-        
-        # Re-normalize just in case the cropresize interpolation slightly altered the sums
-        target_o = target_o / (target_o.sum(dim=-1, keepdim=True) + 1e-8)
-        target_x = target_x / (target_x.sum(dim=-1, keepdim=True) + 1e-8)
 
         target = {}
         target["image"] = image

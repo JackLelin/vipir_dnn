@@ -413,56 +413,26 @@ class GenTrain():
         # Optional random rotation to make examples more general
         if np.random.rand() < 0.5:
             from scipy.ndimage import rotate
-            angle = np.random.uniform(-15, 15)
+            angle = np.random.uniform(-5, 5)
             omode = rotate(omode, angle, reshape=False, order=0)
             xmode = rotate(xmode, angle, reshape=False, order=0)
             multihop_map = rotate(multihop_map, angle, reshape=False, order=0)
-            O_trace = rotate(O_trace, angle, reshape=False, order=0)
-            X_trace = rotate(X_trace, angle, reshape=False, order=0)
             omode_clean = rotate(omode_clean, angle, reshape=False, order=0)
             xmode_clean = rotate(xmode_clean, angle, reshape=False, order=0)
 
-        opres = (np.sum(O_trace,axis=0)>0).astype(np.int_)
-        xpres = (np.sum(X_trace,axis=0)>0).astype(np.int_)
-
-        if np.sum(opres) > 2/3 * self.freqs.shape[0] and np.random.rand() < 0.10:
+        if np.sum(np.sum(omode_clean, axis=0) > 0) > 2/3 * self.freqs.shape[0] and np.random.rand() < 0.10:
             crop_idx = np.random.randint(int(0.1 * self.freqs.shape[0]), int(0.4 * self.freqs.shape[0]))
-            opres[:crop_idx] = 0
-            xpres[:crop_idx] = 0
-            O_trace[:, :crop_idx] = 0
-            X_trace[:, :crop_idx] = 0
+            omode[:, :crop_idx] = 0
+            xmode[:, :crop_idx] = 0
+            omode_clean[:, :crop_idx] = 0
+            xmode_clean[:, :crop_idx] = 0
 
         if np.random.uniform(0,1) < 0.05:# 0.05: # 5% chance negative data
             omode = np.zeros(omode.shape, dtype=np.uint8)
             xmode = np.zeros(xmode.shape, dtype=np.uint8)
+            omode_clean = np.zeros(omode_clean.shape, dtype=np.uint8)
+            xmode_clean = np.zeros(xmode_clean.shape, dtype=np.uint8)
             multihop_map = np.zeros(multihop_map.shape, dtype=np.uint8)
-            opres *= 0
-            xpres *= 0
-
-        ovhidx = np.zeros(self.freqs.shape[0], dtype=np.int_)
-        xvhidx = np.zeros(self.freqs.shape[0], dtype=np.int_)
-        for i in range(self.freqs.shape[0]):
-            if opres[i] != 0:
-                nz = np.nonzero(O_trace[:, i])[0]
-                if len(nz) > 0:
-                    ovhidx[i] = int(np.median(nz))
-            if xpres[i] != 0:
-                nz = np.nonzero(X_trace[:, i])[0]
-                if len(nz) > 0:
-                    xvhidx[i] = int(np.median(nz))
-
-        # Calculate Gaussian sigmas (trace width) for each frequency column
-        ovh_sigma = np.zeros(self.freqs.shape[0])
-        xvh_sigma = np.zeros(self.freqs.shape[0])
-        for i in range(self.freqs.shape[0]):
-            if opres[i] != 0:
-                o_indices = np.nonzero(omode_clean[:, i])[0]
-                if len(o_indices) > 0:
-                    ovh_sigma[i] = np.std(o_indices)**0.8
-            if xpres[i] != 0:
-                x_indices = np.nonzero(xmode_clean[:, i])[0]
-                if len(x_indices) > 0:
-                    xvh_sigma[i] = np.std(x_indices)**0.8
 
         fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
         ax1 = axes[0]
@@ -481,32 +451,16 @@ class GenTrain():
 
         ax2 = axes[1]
         
-        # Generate Gaussian soft-labels for visualization
-        y_grid = np.arange(self.hts.shape[0])[:, None]
-        safe_osigma = np.maximum(ovh_sigma, 0.5)
-        safe_xsigma = np.maximum(xvh_sigma, 0.5)
-        
-        pdf_o = np.exp(-0.5 * ((y_grid - ovhidx[None, :]) / safe_osigma[None, :])**2) * opres[None, :]
-        pdf_x = np.exp(-0.5 * ((y_grid - xvhidx[None, :]) / safe_xsigma[None, :])**2) * xpres[None, :]
-        
-        # Mask near-zero probabilities to make them transparent
-        pdf_o_plot = np.where(pdf_o > 0.01, pdf_o, np.nan)
-        pdf_x_plot = np.where(pdf_x > 0.01, pdf_x, np.nan)
-
-        # Plot O-mode: Grey background mask + Gaussian overlay + Tiny red peak scatter
-        ax2.imshow(np.vstack([opres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower', interpolation='nearest')
-        ax2.imshow(pdf_o_plot, cmap='viridis', origin='lower', interpolation='nearest')
-        ax2.scatter(np.arange(opres.shape[0]), ovhidx, s=0.5, c='red', alpha=0.70)
-        ax2.set_title('O-mode Gaussian Label')
+        # Plot O-mode Segmentation Mask
+        ax2.imshow(omode_clean > 0, cmap='viridis', origin='lower', interpolation='nearest')
+        ax2.set_title('O-mode Mask')
         ax2.set_xlim(0, self.freqs.shape[0])
         ax2.set_ylim(0, self.hts.shape[0])
 
         ax3 = axes[2]
-        # Plot X-mode: Grey background mask + Gaussian overlay + Tiny red peak scatter
-        ax3.imshow(np.vstack([xpres]*self.hts.shape[0]), cmap='Greys', alpha=0.3, origin='lower', interpolation='nearest')
-        ax3.imshow(pdf_x_plot, cmap='viridis', origin='lower', interpolation='nearest')
-        ax3.scatter(np.arange(xpres.shape[0]), xvhidx, s=0.5, c='red', alpha=0.70)
-        ax3.set_title('X-mode Gaussian Label')
+        # Plot X-mode Segmentation Mask
+        ax3.imshow(xmode_clean > 0, cmap='viridis', origin='lower', interpolation='nearest')
+        ax3.set_title('X-mode Mask')
         ax3.set_xlim(0, self.freqs.shape[0])
         ax3.set_ylim(0, self.hts.shape[0])
 
@@ -524,9 +478,8 @@ class GenTrain():
             imgTrain.save(f"{self.training_dir}/train/{file_name}")
             
             np.save(f"{self.training_dir}/npy/{file_name}", {
-                'opres':opres, 'xpres':xpres, 
-                'ovhidx':ovhidx, 'xvhidx':xvhidx,
-                'osigma':ovh_sigma, 'xsigma':xvh_sigma
+                'omode_mask': (omode_clean>0).astype(np.uint8),
+                'xmode_mask': (xmode_clean>0).astype(np.uint8)
             })
             # omode_data = np.zeros((*omode.shape,3), dtype=np.uint8)
             # omode_data[:,:,0] = np.flip(O_trace>0,axis=0) * 255
@@ -579,7 +532,7 @@ if __name__ == "__main__":
 
     gt.graph_generate(fes, Z, dz, savedata = False)
 
-    if False:
+    if True:
         from joblib import Parallel, delayed
         import multiprocessing as mp
 
