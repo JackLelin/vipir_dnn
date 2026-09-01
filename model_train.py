@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 import glob
 
-# from utils.evaluate import evaluate
+from utils.evaluate import evaluate
 # from utils.dice_score import dice_coeff
 # from utils.loss_functions import BCE_MSE
 # from utils.loss_functions import CE_by_col
@@ -173,14 +173,24 @@ losses = []
 val_losses = []
 test_losses = []
 
-load_checkpoint = torch.load(save_model_path+'BCE_VTonly_40ktrain_SegLabel_epoch_120_36000_loss0.0000.pth')
-model.load_state_dict(load_checkpoint['model_state_dict'])
-optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
-epoch_elapsed = load_checkpoint['epoch']+1
-test_losses   = load_checkpoint['test_loss']
-val_losses    = load_checkpoint['val_loss']
-losses   = load_checkpoint['train_loss']
-print('epoch_elapsed: ', epoch_elapsed)
+import os
+# Set to the filename of the checkpoint to load, or None to start from scratch
+checkpoint_filename = None # e.g. 'BCE_VTonly_40ktrain_SegLabel_epoch_120_36000_loss0.0000.pth'
+
+if checkpoint_filename:
+    checkpoint_path = os.path.join(save_model_path, checkpoint_filename)
+    if os.path.exists(checkpoint_path):
+        print(f"Loading checkpoint from {checkpoint_path}...")
+        load_checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(load_checkpoint['model_state_dict'])
+        optimizer.load_state_dict(load_checkpoint['optimizer_state_dict']) 
+        epoch_elapsed = load_checkpoint.get('epoch', -1) + 1
+        test_losses   = load_checkpoint.get('test_loss', [])
+        val_losses    = load_checkpoint.get('val_loss', [])
+        losses        = load_checkpoint.get('train_loss', [])
+        print(f"Successfully resumed from epoch: {epoch_elapsed}")
+    else:
+        print(f"Warning: Checkpoint '{checkpoint_path}' not found! Starting training from scratch.")
 
 checkpoint_N = len(train_loader) / 1 # Check point every half epoch
 

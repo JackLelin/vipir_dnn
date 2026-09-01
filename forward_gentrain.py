@@ -44,6 +44,56 @@ class GenTrain():
         result += a[3]*np.exp(-((z-a[4])**2)**a[6]/1000/a[5])
         return result
 
+    def fps_chapman(self, a: np.ndarray, z: np.ndarray) -> np.ndarray:
+        def chapman_fp(z, fp_peak, hm, H):
+            if fp_peak == 0:
+                return np.zeros_like(z)
+            normalized_z = (z - hm) / (H + 0.01)
+            return fp_peak * np.exp(0.25 * (1 - normalized_z - np.exp(-normalized_z)))
+            
+        result = chapman_fp(z, a[0], a[1], a[2])
+        result += chapman_fp(z, a[3], a[4], a[5])
+        if len(a) > 6:
+            result += chapman_fp(z, a[6], a[7], a[8])
+        return result
+
+    def fps_iri(self, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        import iri2016.altitude as iri
+        import datetime
+        
+        alt_iri = np.arange(50, 800, 1.0)
+        
+        while True:
+            year = np.random.randint(2010, 2021)
+            month = np.random.randint(1, 13)
+            day = np.random.randint(1, 28)
+            hour = np.random.randint(0, 24)
+            minute = np.random.choice([0, 15, 30, 45])
+            time = datetime.datetime(year, month, day, hour, minute, 0)
+            
+            lat = np.random.uniform(-60, 60)
+            lon = np.random.uniform(-180, 180)
+            
+            try:
+                sim = iri.IRI(time, [alt_iri[0], alt_iri[-1], 1.0], lat, lon)
+                Ne_m3 = np.squeeze(sim.ne.values)
+                Ne_m3 = np.where(Ne_m3 < 0, 0.0, Ne_m3)
+                fps_iri_vals = np.sqrt(Ne_m3 / 1.24e10)
+                fps_iri_vals = np.nan_to_num(fps_iri_vals, nan=0.0)
+                fps = np.interp(z, alt_iri, fps_iri_vals, left=0.0, right=0.0)
+                
+                max_fps = np.max(fps)
+                # Ensure the ionosphere has a valid shape before scaling
+                if max_fps > 0.5:
+                    # Scale the profile to guarantee a strong ionosphere (peak between 6 and 12 MHz)
+                    # This guarantees OXmode_cython will find reflections and fvs won't be empty!
+                    fps = fps * (np.random.uniform(6.0, 12.0) / max_fps)
+                    a = np.array([lat, lon, year, month, day, hour, minute])
+                    return fps, a
+            except Exception:
+                # If IRI fails (e.g. year out of bounds for data), try again
+                continue
+
     def sampling_fps(self, z, mode): # sampling_fps(self, z:np.ndarray, mode:int) -> tuple[np.ndarray, np.ndarray]:
         # mode = 0
         if mode == 0:
@@ -79,7 +129,7 @@ class GenTrain():
                 ])
             fps = self.fps_parabolic(a,z,beta=a[-1])
             # foE = fps[np.argmin(np.abs(a[4] - z))]
-        else: # mode == 1:
+        elif mode == 1:
             a = np.array([
                 random.uniform(0.75, 1.20) * 10, # a[0]: Gaussian 1 Peak Amplitude
                 random.uniform(300, 500),  #409      # a[1]: Gaussian 1 Peak Altitude (z)
@@ -93,8 +143,26 @@ class GenTrain():
                 ])
             fps = self.fps_gauss(a,z)
             # foE = fps[np.argmin(np.abs(a[4] - z))]
-        # else:
-        #     return None
+        elif mode == 3: # Chapman
+            a = np.array([
+                np.random.uniform(0.5, 1.5) * 8,        # a[0]: F2 Peak fp (MHz)
+                np.random.uniform(220, 400),            # a[1]: F2 Peak Altitude (hm)
+                np.random.uniform(30, 80),              # a[2]: F2 Scale Height (H)
+                
+                np.random.uniform(0.2, 1.0) * 3,        # a[3]: E Peak fp (MHz)
+                np.random.uniform(90, 130),             # a[4]: E Peak Altitude (hm)
+                np.random.uniform(5, 15),               # a[5]: E Scale Height (H)
+                
+                np.random.uniform(0.1, 0.5) * 4 * (np.random.uniform(0.0, 1)>0.3),  # a[6]: F1 Peak fp (MHz)
+                np.random.uniform(150, 220),            # a[7]: F1 Peak Altitude (hm)
+                np.random.uniform(15, 30),              # a[8]: F1 Scale Height (H)
+                ])
+            fps = self.fps_chapman(a, z)
+        elif mode == 4: # IRI
+            fps, a = self.fps_iri(z)
+        else:
+            fps = np.zeros_like(z)
+            a = np.array([])
         return fps,a
 
     def Coo2Mat(self, fvs:np.ndarray, vhs:np.ndarray, vh_start = 40, fs_start = None) -> np.ndarray:
@@ -318,7 +386,7 @@ class GenTrain():
         return mat
 
     def graph_generate(self, fes, Z, dz = 0.5, savedata = False):
-        fps,ppama=self.sampling_fps(Z, mode=np.random.choice([0, 1, 2], p=[0.65, 0.25, 0.1]))
+        fps,ppama=self.sampling_fps(Z, mode=np.random.choice([0, 1, 2, 3, 4], p=[0.22, 0.22, 0.12, 0.22, 0.22]))
         fvsO,vhsO,fvsX,vhsX=OXmode_cython(fps,fes,dz) # x1 y1 x2 y2 
         
         asym_fO = []
