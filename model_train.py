@@ -38,14 +38,14 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
         inputs, labels = data['image'], data['gt']
         inputs, labels = inputs.to(device), labels.to(device)
         outputs = model(inputs)    
-        loss = criterion(outputs[:, 0:2, :, :], labels[:, 0, :, :].long()) + criterion(outputs[:, 2:4, :, :], labels[:, 1, :, :].long())
+        loss = criterion(outputs[:, 0:2, :, :], labels[:, 0, :, :]) + criterion(outputs[:, 2:4, :, :], labels[:, 1, :, :])
         val_loss += loss.item()
         del inputs; del labels
     avg_val_loss = val_loss / len(val_loader)
     val_losses += [avg_val_loss]
-    # test_loss = evaluate(model,test_loader,device)
-    # test_losses += [test_loss.cpu()] # type: ignore
-    # print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
+    test_loss = evaluate(model,test_loader,device)
+    test_losses += [test_loss.cpu()] # type: ignore
+    print(f'Epoch: {epoch_num + 1}, Img:{(i+1)*batch_size} ,Validation Loss: {avg_val_loss:.4f}, Testing Dice_score: {test_loss:.4f}')
     # pick 5 random ionogram for testing
     test_on_binary_ionograms(model, epoch_num+1)
     model.train()
@@ -70,7 +70,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/BCE_VTonly_40ktrain_SegLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/DBCEF_VTonly_40ktrain_SegLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
@@ -192,7 +192,7 @@ if checkpoint_filename:
     else:
         print(f"Warning: Checkpoint '{checkpoint_path}' not found! Starting training from scratch.")
 
-checkpoint_N = len(train_loader) / 1 # Check point every half epoch
+checkpoint_N = len(train_loader) // 1 # Check point every half epoch
 
 # if epoch_elapsed == 0 :
 #     checkpoint_eval(model, 0, -1, val_losses, test_losses, losses)
@@ -207,7 +207,7 @@ for epoch in range(epoch_elapsed,epoch_elapsed+epochs):
             outputs = model(inputs)
             # print('outputs shape',outputs.shape)
             # break
-            loss = criterion(outputs[:, 0:2, :, :], labels[:, 0, :, :].long()) + criterion(outputs[:, 2:4, :, :], labels[:, 1, :, :].long())
+            loss = criterion(outputs[:, 0:2, :, :], labels[:, 0, :, :]) + criterion(outputs[:, 2:4, :, :], labels[:, 1, :, :])
             loss.backward()
             optimizer.step()
             running_loss += loss.item()

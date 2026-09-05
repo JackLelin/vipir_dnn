@@ -14,7 +14,7 @@ class DBCEF(nn.Module):
 
     def forward(self, input : torch.Tensor, target : torch.Tensor):
         y = torch.clamp(self.softmax(input), min = 1e-10, max = 1-1e-10)
-        t = nn.functional.one_hot(target, num_classes = 2).permute(0, 3, 1, 2).contiguous()
+        t = torch.stack([1.0 - target, target], dim=1).contiguous()
 
         N = t.size()[-1]*t.size()[-2]
         beta = torch.sum(t,dim=(-1,-2))/N + self.epsilon 

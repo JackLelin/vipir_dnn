@@ -92,7 +92,7 @@ def main():
     # Finalize figure
     plt.suptitle(f"Predicted Ionograms from IRI Profiles | Jicamarca, Peru | Jan 15, 2016", fontsize=16)
     plt.tight_layout()
-    plt.savefig("iri_ionogram_prediction_6panels.png")
+    # plt.savefig("iri_ionogram_prediction_6panels.png")
     plt.show()
 
 if __name__ == "__main__":

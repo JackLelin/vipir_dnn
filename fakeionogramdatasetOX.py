@@ -12,7 +12,8 @@ import torch.nn.functional as F
 # from torchvision.transforms import ToTensor
 
 class ParabolaIonoDatasetOX(Dataset):
-    def __init__(self, img_dir, target_size = None, resize = 'resize'):
+    def __init__(self, img_dir, target_size = None, resize = 'resize', sigma = 2.0):
+        self.sigma = sigma
         self.img_dir = img_dir+'/train'
         # self.gt_dirO = img_dir+'/O/'
         # self.gt_dirX = img_dir+'/X/'
@@ -54,8 +55,11 @@ class ParabolaIonoDatasetOX(Dataset):
 
         data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
 
-        target_o = torch.from_numpy(data['omode_mask']).float()[None,:,:]
-        target_x = torch.from_numpy(data['xmode_mask']).float()[None,:,:]
+        omode_gaussian = data['omode_mask'].astype(np.float32)
+        xmode_gaussian = data['xmode_mask'].astype(np.float32)
+
+        target_o = torch.from_numpy(omode_gaussian).float()[None,:,:]
+        target_x = torch.from_numpy(xmode_gaussian).float()[None,:,:]
         
         target_o = torch.permute(target_o, (0,2,1))
         target_x = torch.permute(target_x, (0,2,1))
@@ -74,10 +78,46 @@ class ParabolaIonoDatasetOX(Dataset):
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
-    loader_args = dict(batch_size=1,  pin_memory=True, num_workers=10)
-    train_dataset = ParabolaIonoDatasetOX('training_data', target_size= [512,408], resize='pad')
+    import matplotlib.pyplot as plt
+
+    # Set num_workers to 0 for a quick local test
+    loader_args = dict(batch_size=1,  pin_memory=True, num_workers=0)
+    # Initialize with a larger sigma so we can see the effect clearly
+    train_dataset = ParabolaIonoDatasetOX('training_data', target_size=[408, 512], resize='pad', sigma=3.0)
     train_loader = DataLoader(train_dataset, shuffle=True, drop_last=True, **loader_args)
 
     data = next(iter(train_loader))
     print(data['image'].size())
     print(data['gt'].size())
+    
+    # data['image'] is [1, 1, H, W], data['gt'] is [1, 2, H, W]
+    image = data['image'][0, 0].numpy()
+    gt_o = data['gt'][0, 0].numpy()
+    gt_x = data['gt'][0, 1].numpy()
+
+    print(f"Image shape: {image.shape}, GT shape: {data['gt'].shape}")
+
+    # Plot the results
+    fig, axs = plt.subplots(ncols=4, nrows=1, figsize=(20, 5))
+    
+    axs[0].imshow(image.T, origin='lower', aspect='auto', cmap='gray', interpolation='none')
+    axs[0].set_title('Input Image')
+    axs[0].axis('off')
+    
+    axs[1].imshow(gt_o.T, origin='lower', aspect='auto', cmap='viridis', interpolation='none')
+    axs[1].set_title('GT O-mode (EDT + Gaussian)')
+    axs[1].axis('off')
+    
+    axs[2].imshow(gt_x.T, origin='lower', aspect='auto', cmap='viridis', interpolation='none')
+    axs[2].set_title('GT X-mode (EDT + Gaussian)')
+    axs[2].axis('off')
+    
+    # Overlay: Image + GT
+    axs[3].imshow(image.T, origin='lower', aspect='auto', cmap='gray', interpolation='none')
+    # Overlay the combined heatmap with some transparency (alpha=0.6)
+    axs[3].imshow((gt_o + gt_x).T, origin='lower', aspect='auto', cmap='magma', alpha=0.6, interpolation='none')
+    axs[3].set_title('Overlay (Image + Combined GT)')
+    axs[3].axis('off')
+    
+    plt.tight_layout()
+    plt.show()

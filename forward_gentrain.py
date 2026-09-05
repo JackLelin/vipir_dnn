@@ -6,14 +6,16 @@ from scipy.sparse import coo_matrix
 from scipy.signal import find_peaks
 from PIL import Image
 import matplotlib.pyplot as plt
+from scipy.ndimage import distance_transform_edt
 
 from OXmodeCython import OXmode_cython
 
 class GenTrain():
-    def __init__(self, freqs, hts, ipp, training_dir, noise_dir):
+    def __init__(self, freqs, hts, ipp, training_dir, noise_dir, sigma):
         self.freqs = freqs
         self.hts = hts
         self.ipp = ipp
+        self.sigma = sigma
 
         self.training_dir = training_dir
         self.noise_dir = 'VIPIR_PROC/Dog_noise/'
@@ -417,11 +419,14 @@ class GenTrain():
             fo_start = self.freqs[start_idx]
             fx_start = self.freqs[start_idx]
 
-        O_trace = self.Coo2Mat(fvsO,vhsO, fs_start=fo_start)
-        X_trace = self.Coo2Mat(fvsX,vhsX, fs_start=fx_start)
+        O_trace_thin = self.Coo2Mat(fvsO,vhsO, fs_start=fo_start)
+        X_trace_thin = self.Coo2Mat(fvsX,vhsX, fs_start=fx_start)
 
-        ivhsO, ifvsO = np.nonzero(O_trace)
-        ivhsX, ifvsX = np.nonzero(X_trace)
+        omode_clean = np.copy(O_trace_thin)
+        xmode_clean = np.copy(X_trace_thin)
+
+        ivhsO, ifvsO = np.nonzero(O_trace_thin)
+        ivhsX, ifvsX = np.nonzero(X_trace_thin)
 
         # # Generate noisy data
         sigma_x = np.random.uniform(1.5,2.0)
@@ -436,6 +441,8 @@ class GenTrain():
         xmode = coo_matrix((np.ones(fvsX_noisy_x.shape), (vhsX_noisy_y,fvsX_noisy_x)), 
                             shape=(self.hts.shape[0], self.freqs.shape[0])).toarray()
 
+        # omode_clean = np.copy(omode)
+        # xmode_clean = np.copy(xmode)
         # struct = np.array([[0,1,0],[1,1,1],[0,1,0]])
         struct = (np.random.rand(3, 3)<0.5).astype(np.int_)
         struct[1,1] = 1
@@ -448,9 +455,6 @@ class GenTrain():
         noise_map = self.gen_noise_blocks()
         if np.random.uniform(0,1) < 0.5: 
             noise_map = self.add_noise_lines(noise_map)
-            
-        omode_clean = np.copy(omode)
-        xmode_clean = np.copy(xmode)
         
         # 70% chance to add horizontal broadcast interference noise
         if np.random.uniform(0,1) < 0.7:
@@ -488,10 +492,15 @@ class GenTrain():
             omode_clean = rotate(omode_clean, angle, reshape=False, order=0)
             xmode_clean = rotate(xmode_clean, angle, reshape=False, order=0)
 
+        if np.random.rand() < 0.3:
+            crop_idx = np.random.randint(int(0.2 * self.freqs.shape[0]), int(0.6 * self.freqs.shape[0]))
+            multihop_map[:, :crop_idx] = 0
+
         if np.sum(np.sum(omode_clean, axis=0) > 0) > 2/3 * self.freqs.shape[0] and np.random.rand() < 0.10:
             crop_idx = np.random.randint(int(0.1 * self.freqs.shape[0]), int(0.4 * self.freqs.shape[0]))
             omode[:, :crop_idx] = 0
             xmode[:, :crop_idx] = 0
+            multihop_map[:, :crop_idx] = 0
             omode_clean[:, :crop_idx] = 0
             xmode_clean[:, :crop_idx] = 0
 
@@ -502,8 +511,20 @@ class GenTrain():
             xmode_clean = np.zeros(xmode_clean.shape, dtype=np.uint8)
             multihop_map = np.zeros(multihop_map.shape, dtype=np.uint8)
 
-        fig,axes = plt.subplots(1,4,figsize=(23.0,6.0),sharex=False)
-        ax1 = axes[0]
+        if omode_clean.sum() == 0:
+            omode_gaussian = np.zeros_like(omode_clean, dtype=np.float16)
+        else:
+            dist_o = distance_transform_edt(omode_clean == 0)
+            omode_gaussian = np.exp(-(dist_o**2) / (2 * self.sigma**2)).astype(np.float16)
+            
+        if xmode_clean.sum() == 0:
+            xmode_gaussian = np.zeros_like(xmode_clean, dtype=np.float16)
+        else:
+            dist_x = distance_transform_edt(xmode_clean == 0)
+            xmode_gaussian = np.exp(-(dist_x**2) / (2 * self.sigma**2)).astype(np.float16)
+
+        fig,axes = plt.subplots(2,4,figsize=(23.0,6.0),sharex=False)
+        ax1 = axes[0,0]
         ax1.plot(fps,Z,label='Plasma frequency')
         ax1.plot(fvsO,vhsO,label='O-mode')
         ax1.plot(fvsX,vhsX,label='X-mode')
@@ -517,25 +538,38 @@ class GenTrain():
         if fx_peaks.shape[0] > 0:
             ax1.plot(fvsX[fx_peaks],vhsX[fx_peaks],'x')
 
-        ax2 = axes[1]
-        
+        ax2 = axes[0,1]
         # Plot O-mode Segmentation Mask
         ax2.imshow(omode_clean > 0, cmap='viridis', origin='lower', interpolation='nearest')
         ax2.set_title('O-mode Mask')
         ax2.set_xlim(0, self.freqs.shape[0])
         ax2.set_ylim(0, self.hts.shape[0])
 
-        ax3 = axes[2]
+        ax3 = axes[0,2]
         # Plot X-mode Segmentation Mask
         ax3.imshow(xmode_clean > 0, cmap='viridis', origin='lower', interpolation='nearest')
         ax3.set_title('X-mode Mask')
         ax3.set_xlim(0, self.freqs.shape[0])
         ax3.set_ylim(0, self.hts.shape[0])
 
-        ax4 = axes[3]
+        ax4 = axes[0,3]
         ax4.imshow((omode+xmode+noise_map+multihop_map)>0,origin='lower', interpolation='nearest')
         ax4.set_title('Synthetic ionogram')
         ax4.set_axis_off()
+
+        ax5 = axes[1,1]
+        # Plot O-mode Segmentation Mask
+        ax5.imshow(xmode_gaussian, cmap='viridis', origin='lower', interpolation='nearest')
+        ax5.set_title('O-mode gaussian')
+        ax5.set_xlim(0, self.freqs.shape[0])
+        ax5.set_ylim(0, self.hts.shape[0])
+
+        ax6 = axes[1,2]
+        # Plot X-mode Segmentation Mask
+        ax6.imshow(xmode_gaussian, cmap='viridis', origin='lower', interpolation='nearest')
+        ax6.set_title('X-mode gaussian')
+        ax6.set_xlim(0, self.freqs.shape[0])
+        ax6.set_ylim(0, self.hts.shape[0])
 
         if savedata == True: 
             file_name = "_".join([f"{x:.5f}" for x in ppama]) + "_.png"
@@ -544,22 +578,12 @@ class GenTrain():
             
             imgTrain = Image.fromarray(np.flip((omode+xmode+noise_map+multihop_map)>0,axis=0).astype(dtype=np.uint8)*255, 'L')
             imgTrain.save(f"{self.training_dir}/train/{file_name}")
-            
+
             np.save(f"{self.training_dir}/npy/{file_name}", {
-                'omode_mask': (omode_clean>0).astype(np.uint8),
-                'xmode_mask': (xmode_clean>0).astype(np.uint8)
+                'omode_mask': omode_gaussian,
+                'xmode_mask': xmode_gaussian
             })
-            # omode_data = np.zeros((*omode.shape,3), dtype=np.uint8)
-            # omode_data[:,:,0] = np.flip(O_trace>0,axis=0) * 255
-        
-            # xmode_data = np.zeros((*xmode.shape,3), dtype=np.uint8)
-            # xmode_data[:,:,1] = np.flip(X_trace>0,axis=0) * 255
 
-            # imgO = Image.fromarray(omode_data, 'RGB')
-            # imgX = Image.fromarray(xmode_data, 'RGB')
-
-            # imgO.save(f"{self.training_dir}/O/{file_name}")
-            # imgX.save(f"{self.training_dir}/X/{file_name}")
         else:
             plt.show()
         return 
@@ -583,7 +607,7 @@ if __name__ == "__main__":
     ipp = 5.6e3*0.15
     print(ipp)
     # ipp - hts[-1]*1
-    gt = GenTrain(freqs,hts,ipp,training_dir,noise_dir)
+    gt = GenTrain(freqs,hts,ipp,training_dir,noise_dir,sigma=5)
     dt0 = datetime.datetime(2016,1,14)
     igrf_year = dt0.year + (dt0-datetime.datetime(dt0.year,1,1)).total_seconds() / (
             datetime.datetime(dt0.year+1,1,1)-datetime.datetime(dt0.year,1,1)).total_seconds()
