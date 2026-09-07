@@ -23,7 +23,7 @@ from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
 
-batch_size = 16
+batch_size = 8
 save_model_path = '/mnt/LData/MLvipir_save/save_model_latest/'
 
 
@@ -70,7 +70,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/DBCEF_VTonly_40ktrain_SegLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/DBCEF_VTUNET_40ktrain_GaussLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    

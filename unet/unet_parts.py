@@ -91,7 +91,7 @@ def pos_enc(idx : torch.Tensor , n_embd):
 class Transformer(nn.Module):
     '''
     Docstring for Transformer
-    Use each height vector as input token, and do attention along the height axis. The output is still in the same shape as input, but with n_channel_out channels.
+    Treat each frequency column as one token. Apply attention across frequency columns. The output is still in the same shape as input, but with n_channel_out channels.
     Height axis the last demension of the input, so the Transformer is taking transposed image as input (column major format) to minimize the amount of memory operation.
     '''
     """adding positional encoding and multiple Transformer blocks"""

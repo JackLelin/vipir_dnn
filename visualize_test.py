@@ -8,7 +8,7 @@ from testionogramdataset import HandPickTraceDataset
 
 # === User Configuration ===
 # Enter the absolute or relative path to the trained model checkpoint here
-model_path = '/mnt/LData/MLvipir_save/save_model_latest/DBCEF_VTonly_40ktrain_SegLabel_epoch_95_36000_loss0.2868.pth' 
+model_path = '/mnt/LData/MLvipir_save/save_model_latest/DBCEF_VTUNET_40ktrain_GaussLabel_epoch_116_36000_loss0.4269.pth' 
 num_examples = 5
 # ==========================
 
@@ -79,9 +79,11 @@ def main():
                 output = self.model(input_tensor)
             output = output.squeeze(0).cpu()
             
-            pred_O = torch.argmax(output[0:2, :, :], dim=0).numpy()
-            pred_X = torch.argmax(output[2:4, :, :], dim=0).numpy()
-            
+            # pred_O = torch.argmax(output[0:2, :, :], dim=0).numpy()
+            # pred_X = torch.argmax(output[2:4, :, :], dim=0).numpy()
+            pred_O = output[1, :, :].numpy()
+            pred_X = output[3, :, :].numpy()
+
             gt_O = gt[0, :, :].numpy()
             gt_X = gt[1, :, :].numpy()
             input_img = image[0].numpy()
