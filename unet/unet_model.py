@@ -15,11 +15,15 @@ class UNet(nn.Module):
         self.n_channels = n_channels
         self.n_classes = n_classes
         n_att_channel = 4
-        # Transformer-only model: we output directly to the required number of classes
-        self.att = Transformer(n_heads=4, dim_embd=1024, n_blocks=16, p_drop=dropout_p, n_token=input_size[0], dim_embd_in=input_size[1], n_channel_out=n_att_channel)
+
+        self.inc_at = (DoubleConv(n_channels, n_att_channel))
+
+        self.att = Transformer(n_heads=4, dim_embd=1024, n_blocks=8, p_drop=dropout_p,
+                             n_token=input_size[0], dim_embd_in=input_size[1], dim_embd_out=input_size[1], 
+                             n_channel_in=n_att_channel, n_channel_out=n_att_channel)
         
         self.dropout_p = in_dropout_p
-
+        
         self.inc = (DoubleConv(n_att_channel, 64))
         self.down1 = (Down(64, 128))
         self.down2 = (Down(128, 256))
@@ -33,7 +37,8 @@ class UNet(nn.Module):
 
     def forward(self, x):
         xd = nn.functional.dropout(x, p=self.dropout_p, training=True)
-        xa = self.att(xd)
+        xa = self.inc_at(xd)
+        xa = self.att(xa)
 
         x1 = self.inc(xa)
         # x1 = self.drop_layer(x1)

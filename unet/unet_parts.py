@@ -13,7 +13,8 @@ class DoubleConv(nn.Module):
         # self.norm = nn.GroupNorm(in_channels, in_channels)
         self.norm = nn.BatchNorm2d(in_channels)
         self.conv = nn.Sequential(
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False), 
+            #changing the first ReLU to nn.ReLU(inplace=False) fixes the unintended modification of the tensor used by the residual branch.
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True),
             # nn.GroupNorm(out_channels, out_channels),
             nn.BatchNorm2d(out_channels),
@@ -96,18 +97,19 @@ class Transformer(nn.Module):
     '''
     """adding positional encoding and multiple Transformer blocks"""
 
-    def __init__(self, n_heads=1, dim_embd = 1024, n_blocks=5, p_drop = 0.2, n_token=408, dim_embd_in=512, n_channel_out =4):
+    def __init__(self, n_heads=1, dim_embd = 1024, n_blocks=5, p_drop = 0.2, n_token=408, dim_embd_in=512, dim_embd_out=512, n_channel_in =1, n_channel_out =4):
         super().__init__()
 
         # calculate all dimensions
         self.n_token = n_token # number of tokens: number of row or number of col
         self.dim_embd = dim_embd # attention embedding dimension
         self.dim_embd_in = dim_embd_in
+        self.n_channel_in = n_channel_in
         self.n_channel_out = n_channel_out
 
         #Linear projection
-        self.in_linear = nn.Linear(self.dim_embd_in, self.dim_embd)
-        self.out_linear = nn.Linear(self.dim_embd, self.dim_embd_in * n_channel_out)
+        self.in_linear = nn.Linear(self.dim_embd_in*n_channel_in, self.dim_embd)
+        self.out_linear = nn.Linear(self.dim_embd, dim_embd_out * n_channel_out)
 
         #Transformer train
         blocks = [Transformer_element(n_heads=n_heads, dim_embd=dim_embd, n_token=n_token, p_drop=p_drop) for _ in range(n_blocks)]
@@ -120,13 +122,16 @@ class Transformer(nn.Module):
     def forward(self, x: torch.Tensor):
         # assetion of the input size
         B, C, T, E = x.size()
-        assert C == 1 and T == self.n_token and E == self.dim_embd_in, \
-            f"Expected [B,1,{self.n_token},{self.dim_embd_in}], got {x.shape}"
+        assert C == self.n_channel_in and T == self.n_token and E == self.dim_embd_in, \
+            f"Expected [B,{self.n_channel_in},{self.n_token},{self.dim_embd_in}], got {x.shape}"
+        assert self.n_channel_out%self.n_channel_in == 0, \
+            f"n_channel_in {self.n_channel_out} cannot be devided by n_channel_out {self.n_channel_in}"
         assert T == self.n_token
         assert E == self.dim_embd_in
 
-        # Transpose the array, each row is a token. n_row is n_token
-        x_t = x.reshape(B,T,E) # no permuation is needed .permute(0,2,1) the input is already in column major format
+        # Each row is a token. n_row is n_token
+        x_t = x.permute(0,2,3,1) # First permute to channel last
+        x_t = x_t.reshape(B,T,E*C) # reshape the tensor, so the last dim is n_channel * n_embd_in
 
         # Linear projection, change the embedding dimension
         xp = self.in_linear(x_t)
@@ -136,9 +141,8 @@ class Transformer(nn.Module):
         # Linear projection, outputs n_channel_out channels, so n_channel_out * dim_embd_in
         xp = self.out_linear(xp)
         # First reshape to channel last, then permute the axes.
-        # xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,2,1)
-        xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,1,2) # channel first, the image is still transposed 
-        xout = xout + torch.cat([x]*self.n_channel_out, dim=1) #resdual connection
+        xout = xp.reshape(B, T, E, self.n_channel_out).permute(0,3,1,2) # channel first, 
+        xout = xout + torch.cat([x]*(self.n_channel_out//self.n_channel_in), dim=1) #resdual connection
         return xout
     
 class Transformer_element(nn.Module):
@@ -170,12 +174,11 @@ class Transformer_element(nn.Module):
         # 1. Attention Stage with residual
         xp = self.ln1(x) 
         attn_out, _ = self.mhatt(xp, xp, xp)
-        x = x + self.relu(attn_out) # residual connection 1
-        
+        x = x + attn_out
+
         # 2. MLP Stage with residual
         xp = self.ln2(x) 
-        mlp_out = self.mlp(xp)
-        x = x + mlp_out # residual connection 2
+        x = x + self.mlp(xp) # residual connection 2
         
         return x
     
@@ -225,14 +228,16 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.relu1 = nn.ReLU(inplace=False)
+        #changing the first ReLU to nn.ReLU(inplace=False) fixes the unintended modification of the tensor used by the residual branch.
+        self.relu2 = nn.ReLU(inplace=True)
         self.norm = nn.BatchNorm2d(in_channels)
         self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=1)
         self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
     def forward(self, x):
-        x = self.relu(x)
+        x = self.relu1(x)
         y = self.conv1(x) 
-        y = self.relu(y)+ x
+        y = self.relu2(y)+ x
         y = self.norm(y)
         y = self.conv2(y)
         return y

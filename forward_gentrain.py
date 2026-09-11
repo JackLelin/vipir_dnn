@@ -483,7 +483,7 @@ class GenTrain():
         omode = morphology.remove_small_holes(omode, area_threshold=10, connectivity=1)
         xmode = morphology.remove_small_holes(xmode, area_threshold=10, connectivity=1)
         # Optional random rotation to make examples more general
-        if np.random.rand() < 0.5:
+        if np.random.uniform(0,1) < 0.4:
             from scipy.ndimage import rotate
             angle = np.random.uniform(-5, 5)
             omode = rotate(omode, angle, reshape=False, order=0)
@@ -492,7 +492,7 @@ class GenTrain():
             omode_clean = rotate(omode_clean, angle, reshape=False, order=0)
             xmode_clean = rotate(xmode_clean, angle, reshape=False, order=0)
 
-        if np.random.rand() < 0.3:
+        if np.random.uniform(0,1) < 0.3:
             crop_idx = np.random.randint(int(0.2 * self.freqs.shape[0]), int(0.6 * self.freqs.shape[0]))
             multihop_map[:, :crop_idx] = 0
 
@@ -510,6 +510,14 @@ class GenTrain():
             omode_clean = np.zeros(omode_clean.shape, dtype=np.uint8)
             xmode_clean = np.zeros(xmode_clean.shape, dtype=np.uint8)
             multihop_map = np.zeros(multihop_map.shape, dtype=np.uint8)
+
+        if np.random.uniform(0,1) < 0.25:
+            crop_idx = np.random.randint(90, 130)
+            omode[:crop_idx, :] = 0
+            xmode[:crop_idx, :] = 0
+            multihop_map[:crop_idx, :] = 0
+            omode_clean[:crop_idx, :] = 0
+            xmode_clean[:crop_idx, :] = 0
 
         if omode_clean.sum() == 0:
             omode_gaussian = np.zeros_like(omode_clean, dtype=np.float16)

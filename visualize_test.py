@@ -105,7 +105,7 @@ def main():
                 
                 self.ims['gt_comb'] = self.axs[0, 3].imshow(gt_O.T + gt_X.T, origin='lower', aspect='auto', cmap='viridis', interpolation='none')
                 self.axs[0, 3].set_title('Ground Truth Combined')
-                self.axs[0, 3].axis('off')
+                # self.axs[0, 3].axis('off')
                 
                 self.ims['pred_in'] = self.axs[1, 0].imshow(input_img.T, origin='lower', aspect='auto', cmap='gray', interpolation='none')
                 self.axs[1, 0].set_title('Input Image')

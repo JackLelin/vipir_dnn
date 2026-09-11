@@ -150,7 +150,7 @@ else: resize = None
 
 
 
-model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.3)
+model = UNet(n_channels=1, n_classes=4, input_size=target_size, in_dropout_p = 0.3, dropout_p=0.15)
 
 model = model.to(device=device)
 model.train()
