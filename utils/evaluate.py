@@ -18,8 +18,12 @@ def evaluate(net :torch.nn.Module, dataloader :DataLoader, device) ->torch.Tenso
         label = label.to(device=device, dtype=torch.float32)
 
         mask_pred = net(image)
-        imgO = torch.argmax(mask_pred[:,0:2,:,:],dim=1)
-        imgX = torch.argmax(mask_pred[:,2:4,:,:],dim=1)
+        # imgO = torch.argmax(mask_pred[:,0:2,:,:],dim=1)
+        # imgX = torch.argmax(mask_pred[:,2:4,:,:],dim=1)
+
+        imgO = (torch.softmax(mask_pred[:,0:2, :, :], dim=1)[:,1, :, :] > 0.75).float()
+        imgX = (torch.softmax(mask_pred[:,2:4, :, :], dim=1)[:,1, :, :] > 0.75).float()
+        
         # imgX = imgO
         # mask_pred = ((imgO + imgX) > 0).float()[:,None,:,:]
 

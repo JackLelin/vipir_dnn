@@ -8,18 +8,18 @@ import torch.nn.functional as F
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
     """Change to layernorm"""
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, kernel_size=3):
         super().__init__()
         # self.norm = nn.GroupNorm(in_channels, in_channels)
         self.norm = nn.BatchNorm2d(in_channels)
         self.conv = nn.Sequential(
             nn.ReLU(inplace=False), 
             #changing the first ReLU to nn.ReLU(inplace=False) fixes the unintended modification of the tensor used by the residual branch.
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=(kernel_size-1)//2, bias=True),
             # nn.GroupNorm(out_channels, out_channels),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, padding=(kernel_size-1)//2, bias=True),
         )
         self.resconv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
 

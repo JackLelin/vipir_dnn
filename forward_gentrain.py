@@ -6,7 +6,7 @@ from scipy.sparse import coo_matrix
 from scipy.signal import find_peaks
 from PIL import Image
 import matplotlib.pyplot as plt
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, gaussian_filter1d
 
 from OXmodeCython import OXmode_cython
 
@@ -238,7 +238,7 @@ class GenTrain():
         line_mat = np.zeros([self.hts.shape[0],self.freqs.shape[0]])
         M = self.freqs.shape[0]
         N = self.hts.shape[0]
-        for _ in range(80):
+        for _ in range(np.random.randint(40,80)):
             ifv_start = np.random.randint(0, M)
             ivh_start = np.random.randint(0, N)
             ifv_end = ifv_start + np.random.randint(-3, 3)
@@ -256,7 +256,7 @@ class GenTrain():
         outmat = (outmat + inmat) > 0
         return outmat.astype(np.int_)
 
-    def add_horizontal_noise_lines(self, inmat):
+    def add_horizontal_noise_rect(self, inmat):
         # Creates broken, dashed horizontal lines typical of RF broadcast interference
         line_mat = np.zeros([self.hts.shape[0], self.freqs.shape[0]])
         M = self.freqs.shape[0]
@@ -309,6 +309,45 @@ class GenTrain():
             return outmat.astype(np.int_)
         return inmat
 
+    def add_horizontal_noise_line(self, inmat):
+        M = self.freqs.shape[0]
+        N = self.hts.shape[0]
+        
+        # Line at about altitude y idx of 64
+        y_line = int(np.rint(np.random.normal(64, 1.5)))
+        sigma_y = np.random.uniform(1, 1.8)
+        points = 10
+        
+        x_coords = np.repeat(np.arange(M), points)
+        y_coords = np.rint(np.random.normal(y_line, sigma_y, (M, points))).astype(np.int_).flatten()
+        
+        start_x = np.random.randint(0, M//4)
+        end_x = np.random.randint(0, M//2)
+        valid = (y_coords >= 0) & (y_coords < N) & (x_coords >= start_x) & (x_coords < M-end_x)
+        outmat = inmat.copy()
+        outmat[y_coords[valid], x_coords[valid]] = 1
+        return outmat.astype(np.int_)
+
+    def add_vertical_noise_line(self, inmat):
+        M = self.freqs.shape[0]
+        N = self.hts.shape[0]
+        outmat = inmat.copy()
+        
+        num_lines = np.random.randint(1, 3)  # 1 or 2 lines
+        for _ in range(num_lines):
+            x_line = np.random.randint(0, M)
+            sigma_x = np.random.uniform(1, 0.9)
+            points = 10
+            
+            y_coords = np.repeat(np.arange(N), points)
+            x_coords = np.rint(np.random.normal(x_line, sigma_x, (N, points))).astype(np.int_).flatten()
+            
+            start_y = np.random.randint(0, N // 2)
+            end_y = np.random.randint(0, N // 2)
+            valid = (x_coords >= 0) & (x_coords < M) & (y_coords >= start_y) & (y_coords < N - end_y)
+            outmat[y_coords[valid], x_coords[valid]] = 1
+            
+        return outmat.astype(np.int_)
 
     def gen_noise_blocks(self):
         M = self.freqs.shape[0]
@@ -388,23 +427,28 @@ class GenTrain():
         return mat
 
     def graph_generate(self, fes, Z, dz = 0.5, savedata = False):
-        fps,ppama=self.sampling_fps(Z, mode=np.random.choice([0, 1, 2, 3, 4], p=[0.22, 0.22, 0.12, 0.22, 0.22]))
+        fps,ppama=self.sampling_fps(Z, mode=np.random.choice([0, 1, 2, 3, 4], p=[0.29, 0.29, 0.15, 0.15, 0.12]))
+        fps = gaussian_filter1d(fps, sigma=np.random.uniform(1, 60)) #
+
         fvsO,vhsO,fvsX,vhsX=OXmode_cython(fps,fes,dz) # x1 y1 x2 y2 
         
-        asym_fO = []
-        asym_fX = []
-        for i in range(1,fvsO.shape[0]):
-            if vhsO[i] - vhsO[i-1] > 80:
-                asym_fO += [fvsO[i]]
-        for i in range(1,fvsX.shape[0]):
-            if vhsX[i] - vhsX[i-1] > 80:
-                asym_fX += [fvsX[i]]
+        asym_fO = fvsO[1:][(vhsO[1:] - vhsO[:-1]) > 80]
+        asym_fX = fvsX[1:][(vhsX[1:] - vhsX[:-1]) > 80]
+
+        # Find where the flat part at the beginning of the trace ends
+        diff_vhsO = np.abs(vhsO[1:] - vhsO[:-1])
+        non_flat_O = np.where(diff_vhsO >= 1)[0]
+        flat_end_idxO = non_flat_O[0] if len(non_flat_O) > 0 else 0
+
+        diff_vhsX = np.abs(vhsX[1:] - vhsX[:-1])
+        non_flat_X = np.where(diff_vhsX >= 1)[0]
+        flat_end_idxX = non_flat_X[0] if len(non_flat_X) > 0 else 0
 
         fo_peaks, fo_peaks_properties = find_peaks(vhsO,prominence=[3,None],width=1)
         fx_peaks, fx_peaks_properties = find_peaks(vhsX,prominence=[3,None],width=1)
         
         rand_val = np.random.uniform(0, 1)
-        if rand_val < 0.3:  # 30% chance cutting at the last cusps
+        if rand_val < 0.15:  # 15% chance cutting at the last cusps
             if fo_peaks.shape[0] > 0 and fx_peaks.shape[0] > 0:
                 fo_start = fvsO[fo_peaks[0]]
                 fx_start = fvsX[fx_peaks[0]]
@@ -458,8 +502,16 @@ class GenTrain():
         
         # 70% chance to add horizontal broadcast interference noise
         if np.random.uniform(0,1) < 0.7:
-            noise_map = self.add_horizontal_noise_lines(noise_map)
+            noise_map = self.add_horizontal_noise_rect(noise_map)
+
+        # 50% chance to add horizontal EEJ
+        if np.random.uniform(0,1) < 0.5:
+            noise_map = self.add_horizontal_noise_line(noise_map)
         
+        # 20% chance to add vertical interference
+        if np.random.uniform(0,1) < 0.2:
+            noise_map = self.add_vertical_noise_line(noise_map)
+
         multihop_map = self.creating_multihop(fvsO, vhsO, fo_start)#fmin=foe+1) 
         multihop_map += self.creating_multihop(fvsX, vhsX, fx_start)# fmin=foe+1)
 
@@ -496,13 +548,23 @@ class GenTrain():
             crop_idx = np.random.randint(int(0.2 * self.freqs.shape[0]), int(0.6 * self.freqs.shape[0]))
             multihop_map[:, :crop_idx] = 0
 
-        if np.sum(np.sum(omode_clean, axis=0) > 0) > 2/3 * self.freqs.shape[0] and np.random.rand() < 0.10:
+        # if np.sum(np.sum(omode_clean, axis=0) > 0) > 2/3 * self.freqs.shape[0] and np.random.rand() < 0.10:
+        if np.random.rand() < 0.25:
             crop_idx = np.random.randint(int(0.1 * self.freqs.shape[0]), int(0.4 * self.freqs.shape[0]))
             omode[:, :crop_idx] = 0
             xmode[:, :crop_idx] = 0
             multihop_map[:, :crop_idx] = 0
             omode_clean[:, :crop_idx] = 0
             xmode_clean[:, :crop_idx] = 0
+
+        if np.random.rand() < 0.80:
+            crop_idx_O = max(0, flat_end_idxO - np.random.randint(0,30))
+            crop_idx_X = max(0, flat_end_idxX - np.random.randint(0,30))
+            omode[:, :crop_idx_O] = 0
+            xmode[:, :crop_idx_X] = 0
+            multihop_map[:, :crop_idx_O] = 0
+            omode_clean[:, :crop_idx_O] = 0
+            xmode_clean[:, :crop_idx_X] = 0
 
         if np.random.uniform(0,1) < 0.05:# 0.05: # 5% chance negative data
             omode = np.zeros(omode.shape, dtype=np.uint8)
@@ -582,12 +644,13 @@ class GenTrain():
         if savedata == True: 
             file_name = "_".join([f"{x:.5f}" for x in ppama]) + "_.png"
             fig.savefig(f"{self.training_dir}/visual/{file_name}", dpi=100, bbox_inches='tight', pad_inches=0, facecolor=fig.get_facecolor())
-            plt.close()
+            plt.close(fig)
             
-            imgTrain = Image.fromarray(np.flip((omode+xmode+noise_map+multihop_map)>0,axis=0).astype(dtype=np.uint8)*255, 'L')
-            imgTrain.save(f"{self.training_dir}/train/{file_name}")
+            # imgTrain = Image.fromarray(*255, 'L')
+            # imgTrain.save(f"{self.training_dir}/train/{file_name}")
 
             np.save(f"{self.training_dir}/npy/{file_name}", {
+                'train': ((omode+xmode+noise_map+multihop_map)>0).astype(dtype=np.uint8),
                 'omode_mask': omode_gaussian,
                 'xmode_mask': xmode_gaussian
             })
@@ -639,5 +702,5 @@ if __name__ == "__main__":
         para_func = lambda x : gt.graph_generate(fes, Z, dz, savedata = True)
 
         # Use all available CPU cores to generate the graphs in parallel
-        Parallel(n_jobs=mp.cpu_count()-0)(delayed(para_func)(_) for _ in range(40000))
+        Parallel(n_jobs=mp.cpu_count()-4)(delayed(para_func)(_) for _ in range(40000-20832))
 

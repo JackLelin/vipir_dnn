@@ -12,21 +12,15 @@ import torch.nn.functional as F
 # from torchvision.transforms import ToTensor
 
 class ParabolaIonoDatasetOX(Dataset):
-    def __init__(self, img_dir, target_size = None, resize = 'resize', sigma = 2.0):
-        self.sigma = sigma
-        self.img_dir = img_dir+'/train'
-        # self.gt_dirO = img_dir+'/O/'
-        # self.gt_dirX = img_dir+'/X/'
-        self.gt_dir = img_dir+'/npy/'
-        self.img_names = np.array(glob.glob1(self.img_dir,'*.png'))
-        self.vipir_freqs = np.load('JM91J_2016014141141.npy', allow_pickle=True)[()]['vipir_freqs']
-        # np.random.shuffle(self.img_names)
-        self.img_names.sort()
-        self.img_names.tolist()
+    def __init__(self, img_dir, target_size = None, resize = 'resize'):
+        self.npy_dir = os.path.join(img_dir, 'npy')
 
-        original_size = np.array(Image.open(os.path.join(self.img_dir, self.img_names[0]))).T.shape
+        self.img_names = sorted(glob.glob1(self.npy_dir, '*.npy'))
+
+        sample_data = np.load(os.path.join(self.npy_dir, self.img_names[0]), allow_pickle=True)[()]
+        original_size = sample_data['train'].T.shape
+
         self.target_size = target_size if target_size != None else original_size
-        # self.XX, self.YY = torch.meshgrid(torch.linspace(0,1,self.target_size[0],dtype=torch.float32), torch.linspace(0,1,self.target_size[1],dtype=torch.float32))
         if target_size == None:
             self.transform = None 
         elif resize == 'resize':
@@ -40,35 +34,29 @@ class ParabolaIonoDatasetOX(Dataset):
         return len(self.img_names)
 
     def __getitem__(self, idx):
-        #crop_region:[120:-10,30:390]
-        img_path = os.path.join(self.img_dir, self.img_names[idx]) # type: ignore
-        img = np.array(Image.open(img_path))
-        # print('numpy shape',img.shape)
-        image = torch.from_numpy((img>128).astype(np.float32)).float()[None,:,:]
-        image = torch.permute(image, (0,2,1))
-        image = torch.flip(image,dims=[-1]).contiguous()
-        # print('shape after flip',image.shape)
-        if self.transform != None: image = self.transform(image)
-        # print('shape after transform',image.shape)
+        file_path = os.path.join(self.npy_dir, self.img_names[idx])
+        data = np.load(file_path, allow_pickle=True)[()]
 
-        # target["filename"] = idx
-
-        data = np.load(self.gt_dir + self.img_names[idx] + '.npy', allow_pickle=True)[()]
-
+        train_img = data['train'].astype(np.float32)
         omode_gaussian = data['omode_mask'].astype(np.float32)
         xmode_gaussian = data['xmode_mask'].astype(np.float32)
 
-        target_o = torch.from_numpy(omode_gaussian).float()[None,:,:]
-        target_x = torch.from_numpy(xmode_gaussian).float()[None,:,:]
+        image = torch.from_numpy(train_img).float()[None, :, :]
+        image = torch.permute(image, (0, 2, 1)).contiguous()
+        if self.transform != None:
+            image = self.transform(image)
+
+        target_o = torch.from_numpy(omode_gaussian).float()[None, :, :]
+        target_x = torch.from_numpy(xmode_gaussian).float()[None, :, :]
         
-        target_o = torch.permute(target_o, (0,2,1))
-        target_x = torch.permute(target_x, (0,2,1))
+        target_o = torch.permute(target_o, (0, 2, 1)).contiguous()
+        target_x = torch.permute(target_x, (0, 2, 1)).contiguous()
 
         # random crop and resize on both image and labels
         cropped = self.cropresize(torch.cat([image, target_o, target_x], dim=0))
-        image = cropped[0:1,:,:]
-        target_o = cropped[1:2,:,:]
-        target_x = cropped[2:3,:,:]
+        image = cropped[0:1, :, :]
+        target_o = cropped[1:2, :, :]
+        target_x = cropped[2:3, :, :]
 
         target = {}
         target["image"] = image
@@ -83,7 +71,7 @@ if __name__ == "__main__":
     # Set num_workers to 0 for a quick local test
     loader_args = dict(batch_size=1,  pin_memory=True, num_workers=0)
     # Initialize with a larger sigma so we can see the effect clearly
-    train_dataset = ParabolaIonoDatasetOX('training_data', target_size=[408, 512], resize='pad', sigma=3.0)
+    train_dataset = ParabolaIonoDatasetOX('training_data', target_size=[408, 512], resize='pad')
     train_loader = DataLoader(train_dataset, shuffle=True, drop_last=True, **loader_args)
 
     data = next(iter(train_loader))

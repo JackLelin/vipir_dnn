@@ -23,7 +23,7 @@ from testionogramdataset import HandPickTraceDataset
 
 from torch.optim import AdamW
 
-batch_size = 8
+batch_size = 16
 save_model_path = '/mnt/LData/MLvipir_save/save_model_latest/'
 
 
@@ -70,7 +70,7 @@ def checkpoint_eval(model, epoch_num, i, val_losses, test_losses, losses):
     'test_loss': test_losses,
     'val_loss': val_losses,
     'train_loss': losses,
-    }, f'{save_model_path}/DBCEF_VTUNET_40ktrain_GaussLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
+    }, f'{save_model_path}/DBCEF_VTconvIO_40ktrain_GaussLabel_epoch_{epoch_num + 1}_{(i+1)*batch_size}_loss{test_loss:.4f}.pth')
 
 @torch.no_grad()
 def test_on_binary_ionograms(model, epoch_num):    
@@ -167,7 +167,7 @@ dbcefloss = dbcefloss.to(device=device)
 # ce_by_col = CE_by_col().to(device=device)
 criterion = dbcefloss
 
-epochs = 120
+epochs = 47
 epoch_elapsed = 0
 losses = []
 val_losses = []
@@ -175,7 +175,8 @@ test_losses = []
 
 import os
 # Set to the filename of the checkpoint to load, or None to start from scratch
-checkpoint_filename = None # e.g. 'BCE_VTonly_40ktrain_SegLabel_epoch_120_36000_loss0.0000.pth'
+checkpoint_filename = "DBCEF_VTconvIO_40ktrain_GaussLabel_epoch_73_36000_loss0.8641.pth" 
+#None # e.g. 'BCE_VTonly_40ktrain_SegLabel_epoch_120_36000_loss0.0000.pth'
 
 if checkpoint_filename:
     checkpoint_path = os.path.join(save_model_path, checkpoint_filename)
